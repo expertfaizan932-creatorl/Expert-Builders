@@ -4263,6 +4263,9 @@ function ensure_properties_table(): void
             sale_price DECIMAL(20,2) DEFAULT 0,
             currency VARCHAR(8) DEFAULT "PKR",
             installment_available TINYINT(1) NOT NULL DEFAULT 0,
+            down_payment DECIMAL(20,2) DEFAULT 0,
+            installment_months INT DEFAULT 0,
+            monthly_installment DECIMAL(20,2) DEFAULT 0,
             ready_for_possession TINYINT(1) NOT NULL DEFAULT 0,
             bedrooms VARCHAR(16) DEFAULT "",
             bathrooms VARCHAR(16) DEFAULT "",
@@ -4321,6 +4324,19 @@ function ensure_properties_table(): void
         db()->exec('ALTER TABLE properties ADD COLUMN currency VARCHAR(8) DEFAULT "PKR" AFTER sale_price');
         db()->exec('ALTER TABLE properties ADD COLUMN installment_available TINYINT(1) NOT NULL DEFAULT 0 AFTER currency');
         db()->exec('ALTER TABLE properties ADD COLUMN ready_for_possession TINYINT(1) NOT NULL DEFAULT 0 AFTER installment_available');
+    }
+
+    $planCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'down_payment'"
+    );
+    $planCheck->execute();
+    if ((int)$planCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN down_payment DECIMAL(20,2) DEFAULT 0 AFTER installment_available');
+        db()->exec('ALTER TABLE properties ADD COLUMN installment_months INT DEFAULT 0 AFTER down_payment');
+        db()->exec('ALTER TABLE properties ADD COLUMN monthly_installment DECIMAL(20,2) DEFAULT 0 AFTER installment_months');
     }
 
     $amenityCheck = db()->prepare(
@@ -4398,6 +4414,9 @@ function property_fields(array $body): array
         'sale_price' => $money($body['sale_price'] ?? 0),
         'currency' => $pick($body['currency'] ?? '', PROPERTY_CURRENCIES, 'PKR'),
         'installment_available' => $flag($body['installment_available'] ?? false),
+        'down_payment' => $money($body['down_payment'] ?? 0),
+        'installment_months' => (int)(float)str_replace(',', '', trim((string)($body['installment_months'] ?? '0'))),
+        'monthly_installment' => $money($body['monthly_installment'] ?? 0),
         'ready_for_possession' => $flag($body['ready_for_possession'] ?? false),
         'bedrooms' => $t($body['bedrooms'] ?? ''),
         'bathrooms' => $t($body['bathrooms'] ?? ''),
@@ -4434,8 +4453,11 @@ function property_payload(array $row): array
     foreach (['sale_price', 'original_price', 'discount'] as $f) {
         if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
-    foreach (['installment_available', 'ready_for_possession'] as $f) {
+    foreach (['installment_available', 'ready_for_possession', 'installment_months'] as $f) {
         if (isset($row[$f])) $row[$f] = (int)$row[$f];
+    }
+    foreach (['down_payment', 'monthly_installment'] as $f) {
+        if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
     foreach (['latitude', 'longitude'] as $f) {
         if (isset($row[$f])) $row[$f] = $row[$f] === null ? null : (float)$row[$f];
@@ -4502,14 +4524,15 @@ function create_property(array $body): void
         'INSERT INTO properties
             (name, code, property_type, subtype, purpose, floor, block, registration_no,
              current_status, status,
-             sale_price, currency, installment_available, ready_for_possession,
+             sale_price, currency, installment_available, down_payment, installment_months,
+             monthly_installment, ready_for_possession,
              bedrooms, bathrooms, amenities, video_url,
              contact_email, contact_mobile, contact_landline,
              original_price, discount, payment_plan, customer, agent, sale_date,
              booking_date, transfer_status, transfer_date, transfer_from, transfer_to,
              address, city, area, size, unit, latitude, longitude, description)
          VALUES (:name, :code, :ptype, :subtype, :purpose, :floor, :block, :reg, :cstatus, :status,
-                 :sale, :currency, :installment, :possession,
+                 :sale, :currency, :installment, :down, :months, :monthly, :possession,
                  :bedrooms, :bathrooms, :amenities, :video_url,
                  :c_email, :c_mobile, :c_landline,
                  :orig, :disc, :plan, :cust, :agent, :sale_date,
@@ -4523,6 +4546,8 @@ function create_property(array $body): void
         ':cstatus' => $f['current_status'], ':status' => $f['status'],
         ':sale' => $f['sale_price'],
         ':currency' => $f['currency'], ':installment' => $f['installment_available'],
+        ':down' => $f['down_payment'], ':months' => $f['installment_months'],
+        ':monthly' => $f['monthly_installment'],
         ':possession' => $f['ready_for_possession'],
         ':bedrooms' => $f['bedrooms'], ':bathrooms' => $f['bathrooms'],
         ':amenities' => $f['amenities'], ':video_url' => $f['video_url'],

@@ -28,6 +28,9 @@ interface FormState {
   price: string;
   currency: string;
   installment: boolean;
+  downPayment: string;
+  installmentMonths: string;
+  monthlyInstallment: string;
   possession: boolean;
   bedrooms: string;
   bathrooms: string;
@@ -52,8 +55,11 @@ const EMPTY: FormState = {
   unit: 'Sq. Ft.',
   price: '',
   currency: 'PKR',
-  installment: false,
-  possession: false,
+installment: false,
+downPayment: '',
+installmentMonths: '',
+monthlyInstallment: '',
+possession: false,
   bedrooms: '',
   bathrooms: '',
   amenities: [],
@@ -121,6 +127,9 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         sale_price: Number(form.price.replace(/,/g, '')) || 0,
         currency: form.currency,
         installment_available: form.installment ? 1 : 0,
+        down_payment: Number(form.downPayment.replace(/,/g, '')) || 0,
+        installment_months: Number(form.installmentMonths) || 0,
+        monthly_installment: Number(form.monthlyInstallment.replace(/,/g, '')) || 0,
         ready_for_possession: form.possession ? 1 : 0,
         bedrooms: form.bedrooms,
         bathrooms: form.bathrooms,
@@ -221,6 +230,12 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             onCurrency={(v) => set('currency', v)}
             installment={form.installment}
             onInstallment={(v) => set('installment', v)}
+            downPayment={form.downPayment}
+            onDownPayment={(v) => set('downPayment', v)}
+            installmentMonths={form.installmentMonths}
+            onInstallmentMonths={(v) => set('installmentMonths', v)}
+            monthlyInstallment={form.monthlyInstallment}
+            onMonthlyInstallment={(v) => set('monthlyInstallment', v)}
             possession={form.possession}
             onPossession={(v) => set('possession', v)}
           />
