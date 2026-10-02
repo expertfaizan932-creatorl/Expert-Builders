@@ -372,7 +372,7 @@ function create_contact(array $body): void
             }
 
             // This lead already existed (matched by email/phone) and re-submitted
-            // the form — tag it so the repeat submission is visible at a glance.
+            // the form â€” tag it so the repeat submission is visible at a glance.
             $repeatTagId = ensure_tag($pdo, 'Form Re-submitted');
             if ($repeatTagId > 0) {
                 $pdo->prepare('INSERT IGNORE INTO contact_tags (contact_id, tag_id) VALUES (:c, :t)')
@@ -514,7 +514,7 @@ function list_workflows(array $filters): void
     respond(['data' => $rows, 'count' => count($rows)]);
 }
 
-/** LEADS ONLY — quick way to find leads. */
+/** LEADS ONLY â€” quick way to find leads. */
 function list_leads(array $filters): void
 {
     $params = [];
@@ -1618,10 +1618,10 @@ function send_dealer_registration_mail(string $email, string $name, ?string $pla
     }
 
     if ($approved) {
-        $html .= '<p ' . $p . '>Your account is already <strong style="color:#059669;">active</strong> — you can log in anytime using the details above.</p>';
+        $html .= '<p ' . $p . '>Your account is already <strong style="color:#059669;">active</strong> â€” you can log in anytime using the details above.</p>';
     } else {
         $html .= '<p ' . $p . '>Your account is currently <strong style="color:#B45309;">pending administrator approval</strong>. '
-            . 'Login stays disabled until our team approves your registration — you will receive a second email '
+            . 'Login stays disabled until our team approves your registration â€” you will receive a second email '
             . 'with a login button as soon as that happens.</p>';
     }
 
@@ -2826,7 +2826,7 @@ function create_form(array $body): void
     respond(['data' => form_payload($stmt->fetch() ?: ['id' => $id]), 'message' => 'Form saved'], 201);
 }
 
-/** PUT /forms/{id} — full update of the builder form. */
+/** PUT /forms/{id} â€” full update of the builder form. */
 function update_form(int $id, array $body): void
 {
     ensure_forms_table();
@@ -3026,7 +3026,7 @@ function invoice_columns(array $body): array
     ];
 }
 
-/** POST /invoices — save a new sales tax invoice. */
+/** POST /invoices â€” save a new sales tax invoice. */
 function create_invoice(array $body): void
 {
     ensure_invoices_table();
@@ -3074,7 +3074,7 @@ function create_invoice(array $body): void
     respond(['data' => invoice_payload($get->fetch() ?: ['id' => $id]), 'message' => 'Invoice saved'], 201);
 }
 
-/** PUT /invoices/{id} — update an existing sales tax invoice. */
+/** PUT /invoices/{id} â€” update an existing sales tax invoice. */
 function update_invoice(int $id, array $body): void
 {
     ensure_invoices_table();
@@ -3297,7 +3297,7 @@ function ensure_statement_for_receipt(array $c, ?int $createdBy, int $receiptId 
     $createdNew = $sid === 0;
 
     if ($createdNew) {
-        // No statement yet — create one from the receipt voucher's member.
+        // No statement yet â€” create one from the receipt voucher's member.
         $fileNo = $reg !== ''
             ? $reg
             : (preg_match('/File\s*#?\s*([0-9]+)/i', (string)($c['file_details'] ?? ''), $m) ? $m[1] : '');
@@ -3343,7 +3343,7 @@ function ensure_statement_for_receipt(array $c, ?int $createdBy, int $receiptId 
     return $sid;
 }
 
-/** POST /receipts — save a new receipt voucher (auto-updates account statements). */
+/** POST /receipts â€” save a new receipt voucher (auto-updates account statements). */
 function create_receipt(array $body): void
 {
     ensure_receipts_table();
@@ -3386,7 +3386,7 @@ function create_receipt(array $body): void
     respond(['data' => receipt_payload($get->fetch() ?: ['id' => $id]), 'message' => 'Receipt saved'], 201);
 }
 
-/** PUT /receipts/{id} — update an existing receipt voucher. */
+/** PUT /receipts/{id} â€” update an existing receipt voucher. */
 function update_receipt(int $id, array $body): void
 {
     ensure_receipts_table();
@@ -3566,7 +3566,7 @@ function list_account_statements(array $filters): void
     respond(['data' => $rows, 'count' => count($rows)]);
 }
 
-/** GET /account-statements/{id} — single statement + ledger rows. */
+/** GET /account-statements/{id} â€” single statement + ledger rows. */
 function get_account_statement(int $id): void
 {
     ensure_account_statements_table();
@@ -3603,7 +3603,7 @@ function account_statement_columns(array $body): array
     ];
 }
 
-/** POST /account-statements — create a statement (empty ledger). */
+/** POST /account-statements â€” create a statement (empty ledger). */
 function create_account_statement(array $body): void
 {
     ensure_account_statements_table();
@@ -3687,7 +3687,7 @@ function delete_account_statement(int $id): void
     respond(['message' => 'Account statement deleted']);
 }
 
-/** POST /account-statements/{id}/rows — add a ledger row. */
+/** POST /account-statements/{id}/rows â€” add a ledger row. */
 function add_statement_row(int $sid, array $body): void
 {
     ensure_account_statements_table();
@@ -3961,7 +3961,7 @@ function send_test_email(array $body): void
     $to = trim((string)($body['to'] ?? ''));
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) fail('A valid "to" email is required');
 
-    $subject = trim((string)($body['subject'] ?? '')) ?: 'Expert Builders CRM — SMTP test email';
+    $subject = trim((string)($body['subject'] ?? '')) ?: 'Expert Builders CRM â€” SMTP test email';
     $html = trim((string)($body['html'] ?? ''))
         ?: '<p style="margin:0 0 10px 0;font-size:14px;color:#334155;">This is a test message from Expert Builders CRM.</p>'
             . '<p style="margin:0;font-size:13px;color:#64748b;">If you received this, the SMTP account '
@@ -4202,7 +4202,7 @@ function assign_submission(int $id, array $body): void
                 ? 'New support ticket assigned to you'
                 : 'New dealership application assigned to you';
             $detail = $isInquiry
-                ? "Ticket {$s['code']} — {$s['problem_category']} for {$who}{$place} (chassis {$s['chassis_number']}). Open Customer Inquiries to follow up."
+                ? "Ticket {$s['code']} â€” {$s['problem_category']} for {$who}{$place} (chassis {$s['chassis_number']}). Open Customer Inquiries to follow up."
                 : "Application {$s['code']} from {$who}{$place} ({$s['business_name']}). Open Dealership Page to review.";
             notify_staff($dealerId, null, $isInquiry ? 'inquiry_assigned' : 'application_assigned', $title, $detail);
         }
@@ -4348,52 +4348,7 @@ function ensure_properties_table(): void
         db()->exec('ALTER TABLE properties ADD COLUMN contact_landline VARCHAR(64) DEFAULT "" AFTER contact_mobile');
     }
 
-    // Seed the starter inventory exactly once.
-    $count = (int)db()->query('SELECT COUNT(*) AS c FROM properties')->fetch()['c'];
-    if ($count > 0) return;
-
-    $seeds = [
-        ['islamabad', 'PROP-001', 'Commercial', '9th Floor', '', '79098989898', 'UnSold', 'Active', '5500000000.00', 'Islamabad'],
-        ['SS-001', 'PROP-002', 'Commercial', '', 'SBS TOWER', '88776655', 'UnSold', 'Active', '5000000.00', 'SBS TOWER'],
-        ['BB-001', 'PROP-003', 'Commercial', '', 'SBS TOWER', '99880022778', 'UnSold', 'Active', '5000000.00', 'SBS TOWER'],
-        ['ALmugni10', 'PROP-004', 'Commercial', '1st Floor', '', '', 'UnSold', 'Active', '3000000.00', 'Gulberg'],
-        ['MM-01', 'PROP-005', 'Commercial', '1st Floor', '', '6655333', 'UnSold', 'Active', '1000000.00', 'Johar Town'],
-        ['LGC 123', 'PROP-006', 'Residential', '', 'A Block', '', 'Sold', 'Active', '900000.00', 'Lahore'],
-        ['12334', 'PROP-007', 'Residential', 'Ground Floor', '', '12334', 'UnSold', 'Active', '14840000.00', 'Islamabad'],
-        ['DHA-201', 'PROP-008', 'Residential', '2nd Floor', 'B Block', 'DHA-20144', 'UnSold', 'Active', '12500000.00', 'DHA Phase 2'],
-        ['CMA-118', 'PROP-009', 'Commercial', '3rd Floor', 'CMA Tower', 'CMA11899', 'Sold', 'Active', '7800000.00', 'Blue Area'],
-        ['FFC-042', 'PROP-010', 'Plot', '', 'Sector C', 'FFC042771', 'UnSold', 'Active', '32000000.00', 'Clifton'],
-        ['BNB-777', 'PROP-011', 'Residential', '5th Floor', 'B Block', 'BNB77712', 'UnSold', 'Inactive', '21000000.00', 'Bahria Town'],
-        ['RCH-310', 'PROP-012', 'Commercial', 'Ground Floor', 'Rachna Plaza', 'RCH31099', 'Sold', 'Active', '45000000.00', 'Gulzar-e-Quaid'],
-        ['IDP-055', 'PROP-013', 'Industrial', 'Ground Floor', 'IDP Warehouse', 'IDP05512', 'UnSold', 'Active', '9800000.00', 'SITE Area'],
-        ['MIR-902', 'PROP-014', 'Residential', '7th Floor', 'Mir Heights', '', 'UnSold', 'Active', '17500000.00', 'F-11'],
-        ['ZAM-141', 'PROP-015', 'Residential', '4th Floor', 'Zamzama Flats', 'ZAM14166', 'Sold', 'Active', '22500000.00', 'Zamzama'],
-        ['NTH-620', 'PROP-016', 'Commercial', '8th Floor', 'North Tower', 'NTH62008', 'UnSold', 'Active', '6400000.00', 'I.I. Chundrigar'],
-        ['GRN-033', 'PROP-017', 'Residential', '1st Floor', 'Garden Block', 'GRN03345', 'UnSold', 'Active', '8700000.00', 'Cantt'],
-        ['PKW-288', 'PROP-018', 'Plot', '', 'Block D', 'PKW28891', 'UnSold', 'Inactive', '54000000.00', 'Bahria Rawal'],
-        ['SKY-450', 'PROP-019', 'Residential', '10th Floor', 'Skyline', 'SKY45000', 'Sold', 'Active', '39000000.00', 'Clifton Block 2'],
-        ['HRB-111', 'PROP-020', 'Industrial', '2nd Floor', 'Harbour Complex', 'HRB11122', 'UnSold', 'Active', '15500000.00', 'Port Qasim'],
-        ['LNE-007', 'PROP-021', 'Commercial', '6th Floor', 'Lane Complex', 'LNE00733', 'UnSold', 'Active', '11200000.00', 'Main Boulevard'],
-        ['ORB-360', 'PROP-022', 'Residential', '3rd Floor', 'Orbit Homes', 'ORB36077', 'Sold', 'Active', '26500000.00', 'DHA Phase 6'],
-        ['VLT-029', 'PROP-023', 'Commercial', 'Basement', 'Vault Tower', 'VLT02918', 'UnSold', 'Active', '7300000.00', 'Saddar'],
-        ['EMR-815', 'PROP-024', 'Residential', '11th Floor', 'Emerald Court', 'EMR81564', 'UnSold', 'Active', '43000000.00', 'DHA Phase 5'],
-    ];
-
-    $stmt = db()->prepare(
-        'INSERT INTO properties
-            (name, code, property_type, floor, block, registration_no, current_status,
-             status, sale_price, original_price, address, area)
-         VALUES (:name, :code, :type, :floor, :block, :reg, :cstatus, :status,
-                 :sale, :orig, :address, :area)'
-    );
-
-    foreach ($seeds as $s) {
-        $stmt->execute([
-            ':name' => $s[0], ':code' => $s[1], ':type' => $s[2], ':floor' => $s[3],
-            ':block' => $s[4], ':reg' => $s[5], ':cstatus' => $s[6], ':status' => $s[7],
-            ':sale' => $s[8], ':orig' => $s[8], ':address' => $s[9], ':area' => $s[9],
-        ]);
-    }
+    // No starter inventory: the table stays empty until a property is added.
 }
 
 /** Whitelist + normalise every writable property column. */
@@ -4629,7 +4584,7 @@ function ensure_property_exists(int $propertyId): void
     if ($exists->fetchColumn() === false) fail('Property not found', 404);
 }
 
-/** GET /properties/{id}/images — metadata only, never the image bytes. */
+/** GET /properties/{id}/images â€” metadata only, never the image bytes. */
 function list_property_images(int $propertyId): void
 {
     ensure_property_images_table();
@@ -4644,7 +4599,7 @@ function list_property_images(int $propertyId): void
     respond(['data' => $stmt->fetchAll(), 'count' => $stmt->rowCount()]);
 }
 
-/** POST /properties/{id}/images — store an uploaded image as a base64 data URI. */
+/** POST /properties/{id}/images â€” store an uploaded image as a base64 data URI. */
 function create_property_image(int $propertyId, array $body): void
 {
     ensure_property_images_table();
@@ -4685,7 +4640,7 @@ function create_property_image(int $propertyId, array $body): void
     respond(['data' => ['id' => (int)db()->lastInsertId()], 'message' => 'Image uploaded'], 201);
 }
 
-/** GET /properties/{id}/images/{imageId} — the raw image bytes. */
+/** GET /properties/{id}/images/{imageId} â€” the raw image bytes. */
 function get_property_image(int $propertyId, int $imageId): void
 {
     ensure_property_images_table();
