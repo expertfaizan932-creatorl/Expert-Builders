@@ -798,11 +798,6 @@ function withFallback<T>(net: () => Promise<T>, local: () => Promise<T>): Promis
   );
 }
 
-/** True when the property module is running on the browser-local fallback store. */
-export function isPropertyModuleOffline(): boolean {
-  return propertiesOffline;
-}
-
 export const api = {
   listContacts: (params: ListParams = {}) =>
     request<{ data: ApiContact[]; count: number }>(`/contacts${toQuery(params)}`),
