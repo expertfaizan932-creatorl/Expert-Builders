@@ -2,8 +2,10 @@ import { useState } from 'react';
 import {
   HiOutlineArrowTrendingDown,
   HiOutlineBanknotes,
+  HiOutlineBuildingOffice2,
   HiOutlineCalendarDays,
   HiOutlineChevronDown,
+  HiOutlineCircleStack,
   HiOutlineCurrencyRupee,
   HiOutlineInformationCircle,
   HiOutlineKey,
@@ -60,6 +62,83 @@ function Toggle({ label, hint, icon: Icon, on, onChange }: ToggleProps) {
   );
 }
 
+function Switch({
+  on,
+  onChange,
+  label,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+        on ? 'bg-brand-blue' : 'bg-slate-300'
+      }`}
+    >
+      <span
+        className={`pointer-events-none absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow transition-transform duration-200 ${
+          on ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+}
+
+interface FeeRowProps {
+  id: string;
+  icon: typeof HiOutlineKey;
+  label: string;
+  on: boolean;
+  onToggle: (v: boolean) => void;
+  amount?: string;
+  onAmount?: (v: string) => void;
+  currency: string;
+}
+
+/** Fee option: title + hint with a switch, plus an amount box when the fee has one. */
+function FeeRow({ id, icon: Icon, label, on, onToggle, amount = '', onAmount, currency }: FeeRowProps) {
+  const hasAmount = typeof onAmount === 'function';
+  return (
+    <div className="grid items-center gap-4 md:grid-cols-2 md:gap-8">
+      <div className="flex items-center gap-4">
+        <div className={STEP_ICON_CLS}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className={STEP_TITLE_CLS}>{label}</h3>
+          <p className={STEP_HINT_CLS}>Enable if applicable</p>
+        </div>
+        <Switch on={on} onChange={onToggle} label={label} />
+      </div>
+
+      {hasAmount && (
+        <div className="md:pl-2">
+          <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500" htmlFor={id}>
+            Amount
+          </label>
+          <input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            value={amount}
+            disabled={!on}
+            onChange={(e) => onAmount?.(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder={`Enter Amount in ${currency}`}
+            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue disabled:bg-slate-50 disabled:text-slate-400"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   size: string;
   onSize: (v: string) => void;
@@ -77,6 +156,20 @@ interface Props {
   onInstallmentCount: (v: string) => void;
   monthlyInstallment: string;
   onMonthlyInstallment: (v: string) => void;
+  balloonPayment: boolean;
+  onBalloonPayment: (v: boolean) => void;
+  ballotingFee: boolean;
+  onBallotingFee: (v: boolean) => void;
+  ballotingAmount: string;
+  onBallotingAmount: (v: string) => void;
+  possessionFee: boolean;
+  onPossessionFee: (v: boolean) => void;
+  possessionAmount: string;
+  onPossessionAmount: (v: string) => void;
+  developmentFee: boolean;
+  onDevelopmentFee: (v: boolean) => void;
+  developmentAmount: string;
+  onDevelopmentAmount: (v: string) => void;
   possession: boolean;
   onPossession: (v: boolean) => void;
 }
@@ -99,6 +192,20 @@ export default function PropertyPriceArea({
   onInstallmentCount,
   monthlyInstallment,
   onMonthlyInstallment,
+  balloonPayment,
+  onBalloonPayment,
+  ballotingFee,
+  onBallotingFee,
+  ballotingAmount,
+  onBallotingAmount,
+  possessionFee,
+  onPossessionFee,
+  possessionAmount,
+  onPossessionAmount,
+  developmentFee,
+  onDevelopmentFee,
+  developmentAmount,
+  onDevelopmentAmount,
   possession,
   onPossession,
 }: Props) {
@@ -316,6 +423,58 @@ export default function PropertyPriceArea({
                 />
               </div>
             </div>
+
+            {/* Fee options */}
+            <FeeRow
+              id="pa-balloon"
+              icon={HiOutlineCircleStack}
+              label="Balloon Payment Available"
+              on={balloonPayment}
+              onToggle={onBalloonPayment}
+              currency={currency}
+            />
+
+            <FeeRow
+              id="pa-balloting-fee"
+              icon={HiOutlineBanknotes}
+              label="Balloting Fee"
+              on={ballotingFee}
+              onToggle={(v) => {
+                onBallotingFee(v);
+                if (!v) onBallotingAmount('');
+              }}
+              amount={ballotingAmount}
+              onAmount={onBallotingAmount}
+              currency={currency}
+            />
+
+            <FeeRow
+              id="pa-possession-fee"
+              icon={HiOutlineKey}
+              label="Possession Fee"
+              on={possessionFee}
+              onToggle={(v) => {
+                onPossessionFee(v);
+                if (!v) onPossessionAmount('');
+              }}
+              amount={possessionAmount}
+              onAmount={onPossessionAmount}
+              currency={currency}
+            />
+
+            <FeeRow
+              id="pa-development-fee"
+              icon={HiOutlineBuildingOffice2}
+              label="Development Fee"
+              on={developmentFee}
+              onToggle={(v) => {
+                onDevelopmentFee(v);
+                if (!v) onDevelopmentAmount('');
+              }}
+              amount={developmentAmount}
+              onAmount={onDevelopmentAmount}
+              currency={currency}
+            />
           </>
         )}
 

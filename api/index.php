@@ -4266,6 +4266,13 @@ function ensure_properties_table(): void
             advance_amount DECIMAL(20,2) DEFAULT 0,
             installment_count INT DEFAULT 0,
             monthly_installment DECIMAL(20,2) DEFAULT 0,
+            balloon_payment_available TINYINT(1) NOT NULL DEFAULT 0,
+            balloting_fee_available TINYINT(1) NOT NULL DEFAULT 0,
+            balloting_fee DECIMAL(20,2) DEFAULT 0,
+            possession_fee_available TINYINT(1) NOT NULL DEFAULT 0,
+            possession_fee DECIMAL(20,2) DEFAULT 0,
+            development_fee_available TINYINT(1) NOT NULL DEFAULT 0,
+            development_fee DECIMAL(20,2) DEFAULT 0,
             ready_for_possession TINYINT(1) NOT NULL DEFAULT 0,
             bedrooms VARCHAR(16) DEFAULT "",
             bathrooms VARCHAR(16) DEFAULT "",
@@ -4337,6 +4344,23 @@ function ensure_properties_table(): void
         db()->exec('ALTER TABLE properties ADD COLUMN advance_amount DECIMAL(20,2) DEFAULT 0 AFTER installment_available');
         db()->exec('ALTER TABLE properties ADD COLUMN installment_count INT DEFAULT 0 AFTER advance_amount');
         db()->exec('ALTER TABLE properties ADD COLUMN monthly_installment DECIMAL(20,2) DEFAULT 0 AFTER installment_count');
+    }
+
+    $feeCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'balloon_payment_available'"
+    );
+    $feeCheck->execute();
+    if ((int)$feeCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN balloon_payment_available TINYINT(1) NOT NULL DEFAULT 0 AFTER monthly_installment');
+        db()->exec('ALTER TABLE properties ADD COLUMN balloting_fee_available TINYINT(1) NOT NULL DEFAULT 0 AFTER balloon_payment_available');
+        db()->exec('ALTER TABLE properties ADD COLUMN balloting_fee DECIMAL(20,2) DEFAULT 0 AFTER balloting_fee_available');
+        db()->exec('ALTER TABLE properties ADD COLUMN possession_fee_available TINYINT(1) NOT NULL DEFAULT 0 AFTER balloting_fee');
+        db()->exec('ALTER TABLE properties ADD COLUMN possession_fee DECIMAL(20,2) DEFAULT 0 AFTER possession_fee_available');
+        db()->exec('ALTER TABLE properties ADD COLUMN development_fee_available TINYINT(1) NOT NULL DEFAULT 0 AFTER possession_fee');
+        db()->exec('ALTER TABLE properties ADD COLUMN development_fee DECIMAL(20,2) DEFAULT 0 AFTER development_fee_available');
     }
 
     $amenityCheck = db()->prepare(
@@ -4417,6 +4441,13 @@ function property_fields(array $body): array
         'advance_amount' => $money($body['advance_amount'] ?? 0),
         'installment_count' => (int)(float)str_replace(',', '', trim((string)($body['installment_count'] ?? '0'))),
         'monthly_installment' => $money($body['monthly_installment'] ?? 0),
+        'balloon_payment_available' => $flag($body['balloon_payment_available'] ?? false),
+        'balloting_fee_available' => $flag($body['balloting_fee_available'] ?? false),
+        'balloting_fee' => $money($body['balloting_fee'] ?? 0),
+        'possession_fee_available' => $flag($body['possession_fee_available'] ?? false),
+        'possession_fee' => $money($body['possession_fee'] ?? 0),
+        'development_fee_available' => $flag($body['development_fee_available'] ?? false),
+        'development_fee' => $money($body['development_fee'] ?? 0),
         'ready_for_possession' => $flag($body['ready_for_possession'] ?? false),
         'bedrooms' => $t($body['bedrooms'] ?? ''),
         'bathrooms' => $t($body['bathrooms'] ?? ''),
@@ -4453,10 +4484,10 @@ function property_payload(array $row): array
     foreach (['sale_price', 'original_price', 'discount'] as $f) {
         if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
-    foreach (['installment_available', 'ready_for_possession', 'installment_count'] as $f) {
+    foreach (['installment_available', 'ready_for_possession', 'installment_count', 'balloon_payment_available', 'balloting_fee_available', 'possession_fee_available', 'development_fee_available'] as $f) {
         if (isset($row[$f])) $row[$f] = (int)$row[$f];
     }
-    foreach (['advance_amount', 'monthly_installment'] as $f) {
+    foreach (['advance_amount', 'monthly_installment', 'balloting_fee', 'possession_fee', 'development_fee'] as $f) {
         if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
     foreach (['latitude', 'longitude'] as $f) {
@@ -4525,14 +4556,18 @@ function create_property(array $body): void
             (name, code, property_type, subtype, purpose, floor, block, registration_no,
              current_status, status,
              sale_price, currency, installment_available, advance_amount, installment_count,
-             monthly_installment, ready_for_possession,
+             monthly_installment, balloon_payment_available, balloting_fee_available, balloting_fee,
+             possession_fee_available, possession_fee,
+             development_fee_available, development_fee, ready_for_possession,
              bedrooms, bathrooms, amenities, video_url,
              contact_email, contact_mobile, contact_landline,
              original_price, discount, payment_plan, customer, agent, sale_date,
              booking_date, transfer_status, transfer_date, transfer_from, transfer_to,
              address, city, area, size, unit, latitude, longitude, description)
          VALUES (:name, :code, :ptype, :subtype, :purpose, :floor, :block, :reg, :cstatus, :status,
-                 :sale, :currency, :installment, :adv_amt, :adv_cur, :inst_count, :monthly, :monthly_cur, :possession,
+                 :sale, :currency, :installment, :adv_amt, :inst_count, :monthly,
+                 :balloon, :balloting_on, :balloting_fee, :pos_fee_on, :pos_fee,
+                 :dev_fee_on, :dev_fee, :possession,
                  :bedrooms, :bathrooms, :amenities, :video_url,
                  :c_email, :c_mobile, :c_landline,
                  :orig, :disc, :plan, :cust, :agent, :sale_date,
@@ -4549,6 +4584,10 @@ function create_property(array $body): void
         ':adv_amt' => $f['advance_amount'],
         ':inst_count' => $f['installment_count'],
         ':monthly' => $f['monthly_installment'],
+        ':balloon' => $f['balloon_payment_available'],
+        ':balloting_on' => $f['balloting_fee_available'], ':balloting_fee' => $f['balloting_fee'],
+        ':pos_fee_on' => $f['possession_fee_available'], ':pos_fee' => $f['possession_fee'],
+        ':dev_fee_on' => $f['development_fee_available'], ':dev_fee' => $f['development_fee'],
         ':possession' => $f['ready_for_possession'],
         ':bedrooms' => $f['bedrooms'], ':bathrooms' => $f['bathrooms'],
         ':amenities' => $f['amenities'], ':video_url' => $f['video_url'],

@@ -545,6 +545,13 @@ export interface Property {
   advance_amount: number;
   installment_count: number;
   monthly_installment: number;
+  balloon_payment_available: number;
+  balloting_fee_available: number;
+  balloting_fee: number;
+  possession_fee_available: number;
+  possession_fee: number;
+  development_fee_available: number;
+  development_fee: number;
   ready_for_possession: number;
   bedrooms: string;
   bathrooms: string;

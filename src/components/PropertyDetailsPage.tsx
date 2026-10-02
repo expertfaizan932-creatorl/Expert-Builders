@@ -323,7 +323,11 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
                 <>
                   <Field label="Advance Amount" value={`${fmtPrice(p.advance_amount)} ${p.currency}`} />
                   <Field label="No of Installments" value={p.installment_count || '-'} />
-                  <Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.currency}`} />
+<Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.currency}`} />
+                  <Field label="Balloon Payment Available" value={Number(p.balloon_payment_available) === 1 ? 'Yes' : 'No'} />
+                  <Field label="Balloting Fee" value={Number(p.balloting_fee_available) === 1 ? `${fmtPrice(p.balloting_fee)} ${p.currency}` : 'No'} />
+                  <Field label="Possession Fee" value={Number(p.possession_fee_available) === 1 ? `${fmtPrice(p.possession_fee)} ${p.currency}` : 'No'} />
+                  <Field label="Development Fee" value={Number(p.development_fee_available) === 1 ? `${fmtPrice(p.development_fee)} ${p.currency}` : 'No'} />
                 </>
               )}
               <Field label="Ready for Possession" value={Number(p.ready_for_possession) === 1 ? 'Yes' : 'No'} />
@@ -377,7 +381,11 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
               <>
                 <Field label="Advance Amount" value={`${fmtPrice(p.advance_amount)} ${p.currency}`} />
                 <Field label="No of Installments" value={p.installment_count || '-'} />
-                <Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.currency}`} />
+<Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.currency}`} />
+                <Field label="Balloon Payment Available" value={Number(p.balloon_payment_available) === 1 ? 'Yes' : 'No'} />
+                <Field label="Balloting Fee" value={Number(p.balloting_fee_available) === 1 ? `${fmtPrice(p.balloting_fee)} ${p.currency}` : 'No'} />
+                <Field label="Possession Fee" value={Number(p.possession_fee_available) === 1 ? `${fmtPrice(p.possession_fee)} ${p.currency}` : 'No'} />
+                <Field label="Development Fee" value={Number(p.development_fee_available) === 1 ? `${fmtPrice(p.development_fee)} ${p.currency}` : 'No'} />
               </>
             )}
             <Field label="Ready for Possession" value={Number(p.ready_for_possession) === 1 ? 'Yes' : 'No'} />

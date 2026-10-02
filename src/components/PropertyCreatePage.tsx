@@ -31,6 +31,13 @@ interface FormState {
   advanceAmount: string;
   installmentCount: string;
   monthlyInstallment: string;
+  balloonPayment: boolean;
+  ballotingFee: boolean;
+  ballotingAmount: string;
+  possessionFee: boolean;
+  possessionAmount: string;
+  developmentFee: boolean;
+  developmentAmount: string;
   possession: boolean;
   bedrooms: string;
   bathrooms: string;
@@ -59,6 +66,13 @@ installment: false,
 advanceAmount: '',
 installmentCount: '',
 monthlyInstallment: '',
+balloonPayment: false,
+ballotingFee: false,
+ballotingAmount: '',
+possessionFee: false,
+possessionAmount: '',
+developmentFee: false,
+developmentAmount: '',
 possession: false,
   bedrooms: '',
   bathrooms: '',
@@ -130,6 +144,13 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         advance_amount: Number(form.advanceAmount.replace(/,/g, '')) || 0,
         installment_count: Number(form.installmentCount) || 0,
         monthly_installment: Number(form.monthlyInstallment.replace(/,/g, '')) || 0,
+        balloon_payment_available: form.balloonPayment ? 1 : 0,
+        balloting_fee_available: form.ballotingFee ? 1 : 0,
+        balloting_fee: Number(form.ballotingAmount.replace(/,/g, '')) || 0,
+        possession_fee_available: form.possessionFee ? 1 : 0,
+        possession_fee: Number(form.possessionAmount.replace(/,/g, '')) || 0,
+        development_fee_available: form.developmentFee ? 1 : 0,
+        development_fee: Number(form.developmentAmount.replace(/,/g, '')) || 0,
         ready_for_possession: form.possession ? 1 : 0,
         bedrooms: form.bedrooms,
         bathrooms: form.bathrooms,
@@ -236,6 +257,20 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             onInstallmentCount={(v) => set('installmentCount', v)}
             monthlyInstallment={form.monthlyInstallment}
             onMonthlyInstallment={(v) => set('monthlyInstallment', v)}
+            balloonPayment={form.balloonPayment}
+            onBalloonPayment={(v) => set('balloonPayment', v)}
+            ballotingFee={form.ballotingFee}
+            onBallotingFee={(v) => set('ballotingFee', v)}
+            ballotingAmount={form.ballotingAmount}
+            onBallotingAmount={(v) => set('ballotingAmount', v)}
+            possessionFee={form.possessionFee}
+            onPossessionFee={(v) => set('possessionFee', v)}
+            possessionAmount={form.possessionAmount}
+            onPossessionAmount={(v) => set('possessionAmount', v)}
+            developmentFee={form.developmentFee}
+            onDevelopmentFee={(v) => set('developmentFee', v)}
+            developmentAmount={form.developmentAmount}
+            onDevelopmentAmount={(v) => set('developmentAmount', v)}
             possession={form.possession}
             onPossession={(v) => set('possession', v)}
           />
