@@ -39,6 +39,93 @@ const TABS = [
 
 type Tab = (typeof TABS)[number];
 
+/** Text value with a pencil that turns it into an input, saved on Enter or the tick. */
+function InlineEdit({
+  value,
+  label,
+  placeholder = '',
+  className = '',
+  inputClassName = '',
+  onSave,
+}: {
+  value: string;
+  label: string;
+  placeholder?: string;
+  className?: string;
+  inputClassName?: string;
+  onSave: (next: string) => Promise<void> | void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    input.current?.focus();
+    input.current?.select();
+  }, [open]);
+
+  const commit = () => {
+    setOpen(false);
+    if (draft.trim() !== (value ?? '')) void onSave(draft);
+  };
+
+  if (!open) {
+    return (
+      <div className={`flex items-center gap-1.5 ${className}`}>
+        <span className="truncate">{value || placeholder || '—'}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(value ?? '');
+            setOpen(true);
+          }}
+          aria-label={`Edit ${label}`}
+          title={`Edit ${label}`}
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-60 transition hover:bg-blue-50 hover:text-brand-blue hover:opacity-100"
+        >
+          <FaPen className="text-[9px]" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        ref={input}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setOpen(false);
+        }}
+        aria-label={label}
+        placeholder={placeholder}
+        className={`w-full min-w-0 rounded-lg border border-brand-blue px-2.5 py-1 text-sm font-semibold text-slate-900 outline-none ${inputClassName}`}
+      />
+      <button
+        type="button"
+        onClick={commit}
+        aria-label={`Save ${label}`}
+        title="Save"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-blue text-white transition hover:bg-brand-dark"
+      >
+        <FaCheck className="text-[9px]" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        aria-label={`Cancel ${label}`}
+        title="Cancel"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-300 text-slate-600 transition hover:bg-slate-50"
+      >
+        <FaXmark className="text-[9px]" />
+      </button>
+    </div>
+  );
+}
+
 const RECEIPT_COLS = [
   'Receipt #', 'Date', 'Customer', 'Amount', 'Payment Method', 'Status', 'Actions',
 ];
@@ -100,16 +187,6 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
-  const nameInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (renaming) {
-      nameInput.current?.focus();
-      nameInput.current?.select();
-    }
-  }, [renaming]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,15 +218,15 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
     }
   };
 
-  const handleRename = async (next: string) => {
-    const name = next.trim();
-    if (!name || !property || name === property.name) return;
+  const patchField = async (field: 'name' | 'registration_no', next: string) => {
+    const value = next.trim();
+    if (!property || !value || value === (property[field] ?? '')) return;
     try {
-      const res = await api.updateProperty(id, { name } as Partial<Property>);
+      const res = await api.updateProperty(id, { [field]: value } as Partial<Property>);
       setProperty(res.data ?? null);
-      onNotify('Property name updated');
+      onNotify(field === 'name' ? 'Property name updated' : 'Registration number updated');
     } catch (err) {
-      onNotify((err as Error).message || 'Could not rename property');
+      onNotify((err as Error).message || 'Could not update property');
     }
   };
 
@@ -201,20 +278,12 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
           >
             <FaArrowLeft className="text-sm" />
           </button>
-          <span className="text-slate-800 border-b-2 border-blue-600 h-full flex items-center px-1 font-semibold select-none truncate">
-            {p.name}
-          </span>
-          <button
-            onClick={() => {
-              setNameDraft(p.name);
-              setRenaming(true);
-            }}
-            aria-label="Edit property name"
-            title="Edit name"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-blue-50 hover:text-brand-blue"
-          >
-            <FaPen className="text-[10px]" />
-          </button>
+          <InlineEdit
+            value={p.name}
+            label="property name"
+            className="h-full min-w-0 border-b-2 border-blue-600 px-1 font-semibold text-slate-800"
+            onSave={(v) => patchField('name', v)}
+          />
           <StatusBadge value={p.status} />
         </div>
 
@@ -253,58 +322,12 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
               <div className="flex items-center gap-3">
                 <PropertyAvatar name={p.name} size="lg" />
                 <div className="min-w-0">
-                  {renaming ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        ref={nameInput}
-                        value={nameDraft}
-                        onChange={(e) => setNameDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            void handleRename(nameDraft);
-                            setRenaming(false);
-                          }
-                          if (e.key === 'Escape') setRenaming(false);
-                        }}
-                        aria-label="Property name"
-                        className="w-full max-w-xs rounded-lg border border-brand-blue px-3 py-1.5 text-base font-bold text-slate-900 outline-none"
-                      />
-                      <button
-                        onClick={() => {
-                          void handleRename(nameDraft);
-                          setRenaming(false);
-                        }}
-                        aria-label="Save name"
-                        title="Save"
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-blue text-white transition hover:bg-brand-dark"
-                      >
-                        <FaPen className="text-[10px]" />
-                      </button>
-                      <button
-                        onClick={() => setRenaming(false)}
-                        aria-label="Cancel rename"
-                        title="Cancel"
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition hover:bg-slate-50"
-                      >
-                        <FaXmark className="text-[10px]" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <div className="truncate text-lg font-bold text-slate-900">{p.name}</div>
-                      <button
-                        onClick={() => {
-                          setNameDraft(p.name);
-                          setRenaming(true);
-                        }}
-                        aria-label="Edit property name"
-                        title="Edit name"
-                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-blue-50 hover:text-brand-blue"
-                      >
-                        <FaPen className="text-[10px]" />
-                      </button>
-                    </div>
-                  )}
+                  <InlineEdit
+                    value={p.name}
+                    label="property name"
+                    className="text-lg font-bold text-slate-900"
+                    onSave={(v) => patchField('name', v)}
+                  />
                   <div className="truncate text-xs text-slate-500">
                     {[p.floor, p.block].filter(Boolean).join(' • ') || '—'}
                   </div>
@@ -322,9 +345,13 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                     Registration #
                   </div>
-                  <div className="mt-0.5 text-sm font-medium text-slate-800">
-                    {p.registration_no || '-'}
-                  </div>
+                  <InlineEdit
+                    value={p.registration_no ?? ''}
+                    label="registration number"
+                    placeholder="Not added yet"
+                    className="mt-0.5 text-sm font-medium text-slate-800"
+                    onSave={(v) => patchField('registration_no', v)}
+                  />
                 </div>
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -383,10 +410,24 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
         {tab === 'Overview' && (
           <>
             <Panel title="Property Information">
-              <Field label="Property Name" value={p.name} />
+              <Field
+                label="Property Name"
+                value={<InlineEdit value={p.name} label="property name" className="text-sm font-medium text-slate-800" onSave={(v) => patchField('name', v)} />}
+              />
               <Field label="Property Code" value={p.code} />
               <Field label="Type" value={<TypeBadge value={p.property_type} />} />
-              <Field label="Registration Number" value={p.registration_no} />
+              <Field
+                label="Registration Number"
+                value={
+                  <InlineEdit
+                    value={p.registration_no ?? ''}
+                    label="registration number"
+                    placeholder="Not added yet"
+                    className="text-sm font-medium text-slate-800"
+                    onSave={(v) => patchField('registration_no', v)}
+                  />
+                }
+              />
               <Field label="Floor" value={p.floor} />
               <Field label="Block" value={p.block} />
               <Field label="Size" value={p.size} />
@@ -437,12 +478,26 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
 
         {tab === 'Property Information' && (
           <Panel title="Property Information" cols={4}>
-            <Field label="Property Name" value={p.name} />
+            <Field
+              label="Property Name"
+              value={<InlineEdit value={p.name} label="property name" className="text-sm font-medium text-slate-800" onSave={(v) => patchField('name', v)} />}
+            />
             <Field label="Property Code" value={p.code} />
             <Field label="Purpose" value={p.purpose} />
             <Field label="Type" value={<TypeBadge value={p.property_type} />} />
             <Field label="Sub Type" value={p.subtype} />
-            <Field label="Registration Number" value={p.registration_no} />
+            <Field
+              label="Registration Number"
+              value={
+                <InlineEdit
+                  value={p.registration_no ?? ''}
+                  label="registration number"
+                  placeholder="Not added yet"
+                  className="text-sm font-medium text-slate-800"
+                  onSave={(v) => patchField('registration_no', v)}
+                />
+              }
+            />
             <Field label="Floor" value={p.floor} />
             <Field label="Block" value={p.block} />
             <Field label="Size" value={p.size} />
