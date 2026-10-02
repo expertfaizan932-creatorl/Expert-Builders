@@ -22,6 +22,7 @@ interface FormState {
   property_type: 'Residential' | 'Commercial' | 'Industrial' | 'Plot';
   subtype: string;
   city: string;
+  address: string;
   area: string;
   size: string;
   unit: string;
@@ -57,6 +58,7 @@ const EMPTY: FormState = {
   property_type: 'Residential',
   subtype: firstSubtype('home'),
   city: '',
+  address: '',
   area: '',
   size: '',
   unit: 'Sq. Ft.',
@@ -133,6 +135,7 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         property_type: form.property_type,
         subtype: form.subtype,
         city: form.city.trim(),
+        address: form.address.trim(),
         area: form.area.trim(),
         size: form.size.trim(),
         unit: form.unit,
@@ -232,6 +235,8 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             onSubtype={(v) => set('subtype', v)}
             city={form.city}
             onCity={(v) => set('city', v)}
+            address={form.address}
+            onAddress={(v) => set('address', v)}
             location={form.area}
             onLocation={(v) => set('area', v)}
             coords={form.coords}

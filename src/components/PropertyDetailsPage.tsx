@@ -192,7 +192,20 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
     setLoading(true);
     try {
       const res = await api.getProperty(id);
-      setProperty(res.data ?? null);
+      let row = res.data ?? null;
+      /* Listing saved before property codes existed — hand it the next number. */
+      if (row && !row.code) {
+        try {
+          const list = await api.listProperties();
+          const [filled] = await api.fillPropertyCodes(
+            (list.data ?? []).map((p) => (p.id === id ? row as Property : p)),
+          );
+          if (filled) row = filled;
+        } catch {
+          /* keep whatever we have */
+        }
+      }
+      setProperty(row);
     } catch (err) {
       onNotify((err as Error).message || 'Could not load property');
     } finally {
@@ -218,13 +231,22 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
     }
   };
 
-  const patchField = async (field: 'name' | 'registration_no', next: string) => {
+  const patchField = async (
+    field: 'name' | 'registration_no' | 'current_status' | 'status' | 'floor' | 'block' | 'address',
+    next: string,
+  ) => {
     const value = next.trim();
     if (!property || !value || value === (property[field] ?? '')) return;
     try {
       const res = await api.updateProperty(id, { [field]: value } as Partial<Property>);
       setProperty(res.data ?? null);
-      onNotify(field === 'name' ? 'Property name updated' : 'Registration number updated');
+      onNotify(
+        field === 'name'
+          ? 'Property name updated'
+          : field === 'registration_no'
+            ? 'Registration number updated'
+            : `Property marked as ${value}`,
+      );
     } catch (err) {
       onNotify((err as Error).message || 'Could not update property');
     }
@@ -278,12 +300,9 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
           >
             <FaArrowLeft className="text-sm" />
           </button>
-          <InlineEdit
-            value={p.name}
-            label="property name"
-            className="h-full min-w-0 border-b-2 border-blue-600 px-1 font-semibold text-slate-800"
-            onSave={(v) => patchField('name', v)}
-          />
+          <div className="h-full min-w-0 truncate border-b-2 border-blue-600 px-1 font-semibold text-slate-800">
+            {p.name}
+          </div>
           <StatusBadge value={p.status} />
         </div>
 
@@ -328,8 +347,20 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
                     className="text-lg font-bold text-slate-900"
                     onSave={(v) => patchField('name', v)}
                   />
-                  <div className="truncate text-xs text-slate-500">
-                    {[p.floor, p.block].filter(Boolean).join(' • ') || '—'}
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <InlineEdit
+                      value={p.floor ?? ''}
+                      label="floor"
+                      placeholder="No floor"
+                      onSave={(v) => patchField('floor', v)}
+                    />
+                    <span className="text-slate-300">•</span>
+                    <InlineEdit
+                      value={p.block ?? ''}
+                      label="block"
+                      placeholder="No block"
+                      onSave={(v) => patchField('block', v)}
+                    />
                   </div>
                 </div>
               </div>
@@ -365,20 +396,49 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                     Current Status
                   </div>
-                  <div className="mt-1">
-                    <CurrentStatusBadge value={p.current_status} />
-                  </div>
+                  <select
+                    value={p.current_status || 'UnSold'}
+                    onChange={(e) => patchField('current_status', e.target.value)}
+                    aria-label="Current status"
+                    title="Change sale status"
+                    className="mt-1 w-full cursor-pointer appearance-none rounded-lg border px-2.5 py-1 text-xs font-semibold outline-none transition focus:border-brand-blue"
+                    style={
+                      p.current_status === 'Sold'
+                        ? { background: '#ECFDF5', color: '#047857', borderColor: '#A7F3D0' }
+                        : { background: '#ECFEFF', color: '#0E7490', borderColor: '#A5F3FC' }
+                    }
+                  >
+                    <option value="UnSold">UnSold</option>
+                    <option value="Sold">Sold</option>
+                  </select>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <TypeBadge value={p.property_type} />
-                <StatusBadge value={p.status} />
-                {p.city && (
-                  <span className="text-xs text-slate-500">
-                    {p.address ? `${p.address}, ` : ''}{p.city}
-                  </span>
-                )}
+                <select
+                  value={p.status || 'Active'}
+                  onChange={(e) => patchField('status', e.target.value)}
+                  aria-label="Listing status"
+                  title="Change listing status"
+                  className="cursor-pointer appearance-none rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap outline-none transition focus:border-brand-blue"
+                  style={
+                    p.status === 'Inactive'
+                      ? { background: '#F1F5F9', color: PROP.muted, borderColor: '#E2E8F0' }
+                      : { background: PROP.brandSoft, color: PROP.brand, borderColor: '#BFDBFE' }
+                  }
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+                <InlineEdit
+                  value={p.address ?? ''}
+                  label="address"
+                  placeholder="No address"
+                  className="min-w-0 max-w-full text-xs text-slate-500"
+                  onSave={(v) => patchField('address', v)}
+                />
+                {p.city && <span className="shrink-0 text-xs text-slate-500">• {p.city}</span>}
               </div>
             </div>
           </div>
@@ -410,24 +470,10 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
         {tab === 'Overview' && (
           <>
             <Panel title="Property Information">
-              <Field
-                label="Property Name"
-                value={<InlineEdit value={p.name} label="property name" className="text-sm font-medium text-slate-800" onSave={(v) => patchField('name', v)} />}
-              />
+              <Field label="Property Name" value={p.name} />
               <Field label="Property Code" value={p.code} />
               <Field label="Type" value={<TypeBadge value={p.property_type} />} />
-              <Field
-                label="Registration Number"
-                value={
-                  <InlineEdit
-                    value={p.registration_no ?? ''}
-                    label="registration number"
-                    placeholder="Not added yet"
-                    className="text-sm font-medium text-slate-800"
-                    onSave={(v) => patchField('registration_no', v)}
-                  />
-                }
-              />
+              <Field label="Registration Number" value={p.registration_no} />
               <Field label="Floor" value={p.floor} />
               <Field label="Block" value={p.block} />
               <Field label="Size" value={p.size} />
@@ -478,26 +524,12 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
 
         {tab === 'Property Information' && (
           <Panel title="Property Information" cols={4}>
-            <Field
-              label="Property Name"
-              value={<InlineEdit value={p.name} label="property name" className="text-sm font-medium text-slate-800" onSave={(v) => patchField('name', v)} />}
-            />
+            <Field label="Property Name" value={p.name} />
             <Field label="Property Code" value={p.code} />
             <Field label="Purpose" value={p.purpose} />
             <Field label="Type" value={<TypeBadge value={p.property_type} />} />
             <Field label="Sub Type" value={p.subtype} />
-            <Field
-              label="Registration Number"
-              value={
-                <InlineEdit
-                  value={p.registration_no ?? ''}
-                  label="registration number"
-                  placeholder="Not added yet"
-                  className="text-sm font-medium text-slate-800"
-                  onSave={(v) => patchField('registration_no', v)}
-                />
-              }
-            />
+            <Field label="Registration Number" value={p.registration_no} />
             <Field label="Floor" value={p.floor} />
             <Field label="Block" value={p.block} />
             <Field label="Size" value={p.size} />

@@ -144,6 +144,14 @@ export function localCreateProperty(input: Row) {
   const rows = load();
   const id = rows.reduce((max, p) => Math.max(max, p.id), 0) + 1;
   const row: Property = { ...blank(id), ...(input as Partial<Property>), id };
+  /* No code given? Use the next sequential number, same as the backend. */
+  if (!row.code) {
+    const highest = rows.reduce((max, p) => {
+      const n = Number(p.code);
+      return Number.isInteger(n) && n > max ? n : max;
+    }, 0);
+    row.code = String(highest + 1);
+  }
   rows.push(row);
   save(rows);
   return Promise.resolve({ data: row, message: 'Property created' });

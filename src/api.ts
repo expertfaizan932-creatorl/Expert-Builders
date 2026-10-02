@@ -810,6 +810,18 @@ function withFallback<T>(net: () => Promise<T>, local: () => Promise<T>): Promis
   );
 }
 
+/** Property codes run 1, 2, 3, ... so the next free one is the highest + 1. */
+function nextPropertyCode(rows: Property[]): string {
+  const highest = rows.reduce((max, p) => {
+    const n = Number(p.code);
+    return Number.isInteger(n) && n > max ? n : max;
+  }, 0);
+  return String(highest + 1);
+}
+
+/** Rows already tried for a code backfill, so a failing server is not hammered. */
+const codeFillAttempted = new Set<number>();
+
 export const api = {
   listContacts: (params: ListParams = {}) =>
     request<{ data: ApiContact[]; count: number }>(`/contacts${toQuery(params)}`),
@@ -871,15 +883,54 @@ export const api = {
       () => localGetProperty(id),
     ),
 
-  createProperty: (input: Partial<Property>) =>
-    withFallback(
+  createProperty: async (input: Partial<Property>) => {
+    const body: Partial<Property> = { ...input };
+    /* Codes are sequential, so hand out the next number instead of storing a blank. */
+    if (!body.code) {
+      try {
+        const list = await api.listProperties();
+        body.code = nextPropertyCode(list.data ?? []);
+      } catch {
+        /* listing failed — the backend falls back to its own counter */
+      }
+    }
+    return withFallback(
       () =>
         request<{ data: Property; message: string }>('/properties', {
           method: 'POST',
-          body: JSON.stringify(input),
+          body: JSON.stringify(body),
         }),
-      () => localCreateProperty(input as Record<string, unknown>),
-    ),
+      () => localCreateProperty(body as Record<string, unknown>),
+    );
+  },
+
+  /** Listings saved before codes existed: give them the next sequential number once. */
+  fillPropertyCodes: async (rows: Property[]) => {
+    let next = Number(nextPropertyCode(rows));
+    const out: Property[] = [];
+    for (const row of rows) {
+      if (row.code || codeFillAttempted.has(row.id)) {
+        out.push(row);
+        continue;
+      }
+      codeFillAttempted.add(row.id);
+      const code = String(next++);
+      /* Older API builds need the whole row in the body, newer ones only the code. */
+      const attempts: Partial<Property>[] = [{ code }, { ...row, code }];
+      let filled = { ...row, code };
+      for (const attempt of attempts) {
+        try {
+          const res = await api.updateProperty(row.id, attempt);
+          filled = res.data ?? filled;
+          break;
+        } catch {
+          /* try the next payload shape */
+        }
+      }
+      out.push(filled);
+    }
+    return out;
+  },
 
   updateProperty: (id: number, input: Partial<Property>) =>
     withFallback(

@@ -161,6 +161,8 @@ export default function PropertyFormModal({ open, property, saving, onClose, onS
             onSubtype={(v) => set('subtype', v)}
             city={form.city}
             onCity={(v) => set('city', v)}
+            address={form.address}
+            onAddress={(v) => set('address', v)}
             location={form.area}
             onLocation={(v) => set('area', v)}
           />

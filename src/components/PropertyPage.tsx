@@ -87,7 +87,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
     setLoading(true);
     try {
       const res = await api.listProperties();
-      setRows(res.data ?? []);
+      setRows(await api.fillPropertyCodes(res.data ?? []));
     } catch (err) {
       onNotify((err as Error).message || 'Could not load properties');
     } finally {

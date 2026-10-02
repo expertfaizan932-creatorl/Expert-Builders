@@ -125,6 +125,8 @@ interface Props {
   onSubtype: (v: string) => void;
   city: string;
   onCity: (v: string) => void;
+  address: string;
+  onAddress: (v: string) => void;
   location: string;
   onLocation: (v: string) => void;
   coords?: LatLng | null;
@@ -141,6 +143,8 @@ export default function PropertyLocationPurpose({
   onSubtype,
   city,
   onCity,
+  address,
+  onAddress,
   location,
   onLocation,
   coords = null,
@@ -323,7 +327,26 @@ export default function PropertyLocationPurpose({
           </div>
         </div>
 
-        {/* 4 — Location + map preview */}
+        {/* 4 — Address */}
+        <div className="flex items-start gap-4">
+          <div className={STEP_ICON_CLS}>
+            <HiOutlineHome className="h-4 w-4" />
+          </div>
+          <div className="flex-1">
+            <label className="mb-2 block text-sm font-bold text-slate-800" htmlFor="pp-address">
+              Address
+            </label>
+            <input
+              id="pp-address"
+              value={address}
+              onChange={(e) => onAddress(e.target.value)}
+              placeholder="e.g. House 12, Street 4, Bahria Town"
+              className={`${FIELD_CLS} placeholder:text-slate-400`}
+            />
+          </div>
+        </div>
+
+        {/* 5 — Location + map preview */}
         <div className="flex items-start gap-4">
           <div className={STEP_ICON_CLS}>
             <HiOutlineMap className="h-4 w-4" />

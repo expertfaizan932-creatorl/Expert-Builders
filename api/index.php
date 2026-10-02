@@ -4551,6 +4551,14 @@ function create_property(array $body): void
     $f = property_fields($body);
     if ($f['name'] === '') fail('Property name is required');
 
+    /* No code from the client? Hand out the next sequential one (1, 2, 3, ...). */
+    if ($f['code'] === '') {
+        $next = db()->query(
+            "SELECT COALESCE(MAX(CAST(code AS UNSIGNED)), 0) + 1 FROM properties WHERE code REGEXP '^[0-9]+$'"
+        )->fetchColumn();
+        $f['code'] = (string) (int) $next;
+    }
+
     $stmt = db()->prepare(
         'INSERT INTO properties
             (name, code, property_type, subtype, purpose, floor, block, registration_no,
