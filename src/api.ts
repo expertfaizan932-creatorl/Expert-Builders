@@ -510,6 +510,72 @@ export interface TaskItem {
   created_at: string | null;
 }
 
+export type PropertyType = 'Residential' | 'Commercial' | 'Industrial' | 'Plot';
+export type PropertySaleStatus = 'Sold' | 'UnSold';
+export type PropertyStatus = 'Active' | 'Inactive';
+export type PropertyPurpose = 'Sell' | 'Rent';
+
+export interface Property {
+  id: number;
+  name: string;
+  code: string;
+  property_type: PropertyType;
+  subtype: string;
+  purpose: PropertyPurpose;
+  floor: string;
+  block: string;
+  registration_no: string;
+  current_status: PropertySaleStatus;
+  status: PropertyStatus;
+  sale_price: number;
+  currency: string;
+  installment_available: number;
+  ready_for_possession: number;
+  bedrooms: string;
+  bathrooms: string;
+  amenities: string;
+  video_url: string;
+  contact_email: string;
+  contact_mobile: string;
+  contact_landline: string;
+  original_price: number;
+  discount: number;
+  payment_plan: string;
+  customer: string;
+  agent: string;
+  sale_date: string | null;
+  booking_date: string | null;
+  transfer_status: string;
+  transfer_date: string | null;
+  transfer_from: string;
+  transfer_to: string;
+  address: string;
+  city: string;
+  area: string;
+  size: string;
+  unit: string;
+  description: string | null;
+  created_at: string | null;
+}
+
+export interface PropertyImage {
+  id: number;
+  property_id: number;
+  name: string;
+  size: number;
+  mime: string;
+  created_at: string | null;
+}
+
+export interface PropertyFilters {
+  search?: string;
+  property_type?: string;
+  current_status?: string;
+  status?: string;
+  floor?: string;
+  block?: string;
+}
+
 export interface Note {
   id: number;
   contact_id: number;
@@ -730,6 +796,46 @@ export const api = {
 
   deleteOpportunity: (id: number) =>
     request<{ message: string }>(`/opportunities/${id}`, { method: 'DELETE' }),
+
+  /* ------------------- PROPERTIES ------------------- */
+
+  listProperties: (filters: PropertyFilters = {}) =>
+    request<{ data: Property[]; count: number }>(`/properties${toQuery(filters)}`),
+
+  getProperty: (id: number) => request<{ data: Property }>(`/properties/${id}`),
+
+  createProperty: (input: Partial<Property>) =>
+    request<{ data: Property; message: string }>('/properties', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  updateProperty: (id: number, input: Partial<Property>) =>
+    request<{ data: Property; message: string }>(`/properties/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+
+  deleteProperty: (id: number) =>
+    request<{ message: string }>(`/properties/${id}`, { method: 'DELETE' }),
+
+  listPropertyImages: (id: number) =>
+    request<{ data: PropertyImage[]; count: number }>(`/properties/${id}/images`),
+
+  getPropertyImage: (id: number, imageId: number) =>
+    request<{ data: string; mime: string; name: string }>(`/properties/${id}/images/${imageId}`),
+
+  createPropertyImage: (
+    id: number,
+    input: { data: string; name: string },
+  ) =>
+    request<{ data: { id: number }; message: string }>(`/properties/${id}/images`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  deletePropertyImage: (id: number, imageId: number) =>
+    request<{ message: string }>(`/properties/${id}/images/${imageId}`, { method: 'DELETE' }),
 
   listTasks: (contactId: number) =>
     request<{ data: TaskItem[]; count: number }>(`/contacts/${contactId}/tasks`),

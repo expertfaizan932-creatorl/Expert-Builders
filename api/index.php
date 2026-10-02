@@ -4227,6 +4227,487 @@ function delete_submission(int $id): void
     respond(['message' => 'Submission deleted']);
 }
 
+/* ================================================================
+ * PROPERTY INVENTORY
+ *
+ * Flat (non-contact) property records for the Property Management
+ * module. Created lazily like portal_submissions so existing
+ * deployments upgrade without a manual migration.
+ * ================================================================ */
+
+const PROPERTY_TYPES = ['Residential', 'Commercial', 'Industrial', 'Plot'];
+const PROPERTY_SALE_STATUSES = ['Sold', 'UnSold'];
+const PROPERTY_STATUSES = ['Active', 'Inactive'];
+const PROPERTY_PURPOSES = ['Sell', 'Rent'];
+const PROPERTY_CURRENCIES = ['PKR', 'USD', 'EUR'];
+
+function ensure_properties_table(): void
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS properties (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            code VARCHAR(64) DEFAULT "",
+            property_type VARCHAR(32) DEFAULT "Residential",
+            subtype VARCHAR(64) DEFAULT "",
+            purpose VARCHAR(16) DEFAULT "Sell",
+            floor VARCHAR(64) DEFAULT "",
+            block VARCHAR(120) DEFAULT "",
+            registration_no VARCHAR(64) DEFAULT "",
+            current_status VARCHAR(16) DEFAULT "UnSold",
+            status VARCHAR(16) DEFAULT "Active",
+            sale_price DECIMAL(20,2) DEFAULT 0,
+            currency VARCHAR(8) DEFAULT "PKR",
+            installment_available TINYINT(1) NOT NULL DEFAULT 0,
+            ready_for_possession TINYINT(1) NOT NULL DEFAULT 0,
+            bedrooms VARCHAR(16) DEFAULT "",
+            bathrooms VARCHAR(16) DEFAULT "",
+            amenities VARCHAR(500) DEFAULT "",
+            video_url VARCHAR(500) DEFAULT "",
+            contact_email VARCHAR(160) DEFAULT "",
+            contact_mobile VARCHAR(255) DEFAULT "",
+            contact_landline VARCHAR(64) DEFAULT "",
+            original_price DECIMAL(20,2) DEFAULT 0,
+            discount DECIMAL(20,2) DEFAULT 0,
+            payment_plan VARCHAR(255) DEFAULT "",
+            customer VARCHAR(255) DEFAULT "",
+            agent VARCHAR(255) DEFAULT "",
+            sale_date DATE NULL,
+            booking_date DATE NULL,
+            transfer_status VARCHAR(32) DEFAULT "Not Initiated",
+            transfer_date DATE NULL,
+            transfer_from VARCHAR(255) DEFAULT "",
+            transfer_to VARCHAR(255) DEFAULT "",
+            address VARCHAR(255) DEFAULT "",
+            city VARCHAR(120) DEFAULT "",
+            area VARCHAR(120) DEFAULT "",
+            size VARCHAR(64) DEFAULT "",
+            unit VARCHAR(64) DEFAULT "",
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_prop_status (status),
+            INDEX idx_prop_type (property_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
+    // Column migration: the CREATE TABLE above is a no-op once the table
+    // exists, so add the Location/Purpose columns explicitly.
+    $colCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'purpose'"
+    );
+    $colCheck->execute();
+    if ((int)$colCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN subtype VARCHAR(64) DEFAULT "" AFTER property_type');
+        db()->exec('ALTER TABLE properties ADD COLUMN purpose VARCHAR(16) DEFAULT "Sell" AFTER subtype');
+    }
+
+    $priceCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'currency'"
+    );
+    $priceCheck->execute();
+    if ((int)$priceCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN currency VARCHAR(8) DEFAULT "PKR" AFTER sale_price');
+        db()->exec('ALTER TABLE properties ADD COLUMN installment_available TINYINT(1) NOT NULL DEFAULT 0 AFTER currency');
+        db()->exec('ALTER TABLE properties ADD COLUMN ready_for_possession TINYINT(1) NOT NULL DEFAULT 0 AFTER installment_available');
+    }
+
+    $amenityCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'amenities'"
+    );
+    $amenityCheck->execute();
+    if ((int)$amenityCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN bedrooms VARCHAR(16) DEFAULT "" AFTER ready_for_possession');
+        db()->exec('ALTER TABLE properties ADD COLUMN bathrooms VARCHAR(16) DEFAULT "" AFTER bedrooms');
+        db()->exec('ALTER TABLE properties ADD COLUMN amenities VARCHAR(500) DEFAULT "" AFTER bathrooms');
+    }
+
+    $mediaCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'video_url'"
+    );
+    $mediaCheck->execute();
+    if ((int)$mediaCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN video_url VARCHAR(500) DEFAULT "" AFTER amenities');
+        db()->exec('ALTER TABLE properties ADD COLUMN contact_email VARCHAR(160) DEFAULT "" AFTER video_url');
+        db()->exec('ALTER TABLE properties ADD COLUMN contact_mobile VARCHAR(255) DEFAULT "" AFTER contact_email');
+        db()->exec('ALTER TABLE properties ADD COLUMN contact_landline VARCHAR(64) DEFAULT "" AFTER contact_mobile');
+    }
+
+    // Seed the starter inventory exactly once.
+    $count = (int)db()->query('SELECT COUNT(*) AS c FROM properties')->fetch()['c'];
+    if ($count > 0) return;
+
+    $seeds = [
+        ['islamabad', 'PROP-001', 'Commercial', '9th Floor', '', '79098989898', 'UnSold', 'Active', '5500000000.00', 'Islamabad'],
+        ['SS-001', 'PROP-002', 'Commercial', '', 'SBS TOWER', '88776655', 'UnSold', 'Active', '5000000.00', 'SBS TOWER'],
+        ['BB-001', 'PROP-003', 'Commercial', '', 'SBS TOWER', '99880022778', 'UnSold', 'Active', '5000000.00', 'SBS TOWER'],
+        ['ALmugni10', 'PROP-004', 'Commercial', '1st Floor', '', '', 'UnSold', 'Active', '3000000.00', 'Gulberg'],
+        ['MM-01', 'PROP-005', 'Commercial', '1st Floor', '', '6655333', 'UnSold', 'Active', '1000000.00', 'Johar Town'],
+        ['LGC 123', 'PROP-006', 'Residential', '', 'A Block', '', 'Sold', 'Active', '900000.00', 'Lahore'],
+        ['12334', 'PROP-007', 'Residential', 'Ground Floor', '', '12334', 'UnSold', 'Active', '14840000.00', 'Islamabad'],
+        ['DHA-201', 'PROP-008', 'Residential', '2nd Floor', 'B Block', 'DHA-20144', 'UnSold', 'Active', '12500000.00', 'DHA Phase 2'],
+        ['CMA-118', 'PROP-009', 'Commercial', '3rd Floor', 'CMA Tower', 'CMA11899', 'Sold', 'Active', '7800000.00', 'Blue Area'],
+        ['FFC-042', 'PROP-010', 'Plot', '', 'Sector C', 'FFC042771', 'UnSold', 'Active', '32000000.00', 'Clifton'],
+        ['BNB-777', 'PROP-011', 'Residential', '5th Floor', 'B Block', 'BNB77712', 'UnSold', 'Inactive', '21000000.00', 'Bahria Town'],
+        ['RCH-310', 'PROP-012', 'Commercial', 'Ground Floor', 'Rachna Plaza', 'RCH31099', 'Sold', 'Active', '45000000.00', 'Gulzar-e-Quaid'],
+        ['IDP-055', 'PROP-013', 'Industrial', 'Ground Floor', 'IDP Warehouse', 'IDP05512', 'UnSold', 'Active', '9800000.00', 'SITE Area'],
+        ['MIR-902', 'PROP-014', 'Residential', '7th Floor', 'Mir Heights', '', 'UnSold', 'Active', '17500000.00', 'F-11'],
+        ['ZAM-141', 'PROP-015', 'Residential', '4th Floor', 'Zamzama Flats', 'ZAM14166', 'Sold', 'Active', '22500000.00', 'Zamzama'],
+        ['NTH-620', 'PROP-016', 'Commercial', '8th Floor', 'North Tower', 'NTH62008', 'UnSold', 'Active', '6400000.00', 'I.I. Chundrigar'],
+        ['GRN-033', 'PROP-017', 'Residential', '1st Floor', 'Garden Block', 'GRN03345', 'UnSold', 'Active', '8700000.00', 'Cantt'],
+        ['PKW-288', 'PROP-018', 'Plot', '', 'Block D', 'PKW28891', 'UnSold', 'Inactive', '54000000.00', 'Bahria Rawal'],
+        ['SKY-450', 'PROP-019', 'Residential', '10th Floor', 'Skyline', 'SKY45000', 'Sold', 'Active', '39000000.00', 'Clifton Block 2'],
+        ['HRB-111', 'PROP-020', 'Industrial', '2nd Floor', 'Harbour Complex', 'HRB11122', 'UnSold', 'Active', '15500000.00', 'Port Qasim'],
+        ['LNE-007', 'PROP-021', 'Commercial', '6th Floor', 'Lane Complex', 'LNE00733', 'UnSold', 'Active', '11200000.00', 'Main Boulevard'],
+        ['ORB-360', 'PROP-022', 'Residential', '3rd Floor', 'Orbit Homes', 'ORB36077', 'Sold', 'Active', '26500000.00', 'DHA Phase 6'],
+        ['VLT-029', 'PROP-023', 'Commercial', 'Basement', 'Vault Tower', 'VLT02918', 'UnSold', 'Active', '7300000.00', 'Saddar'],
+        ['EMR-815', 'PROP-024', 'Residential', '11th Floor', 'Emerald Court', 'EMR81564', 'UnSold', 'Active', '43000000.00', 'DHA Phase 5'],
+    ];
+
+    $stmt = db()->prepare(
+        'INSERT INTO properties
+            (name, code, property_type, floor, block, registration_no, current_status,
+             status, sale_price, original_price, address, area)
+         VALUES (:name, :code, :type, :floor, :block, :reg, :cstatus, :status,
+                 :sale, :orig, :address, :area)'
+    );
+
+    foreach ($seeds as $s) {
+        $stmt->execute([
+            ':name' => $s[0], ':code' => $s[1], ':type' => $s[2], ':floor' => $s[3],
+            ':block' => $s[4], ':reg' => $s[5], ':cstatus' => $s[6], ':status' => $s[7],
+            ':sale' => $s[8], ':orig' => $s[8], ':address' => $s[9], ':area' => $s[9],
+        ]);
+    }
+}
+
+/** Whitelist + normalise every writable property column. */
+function property_fields(array $body): array
+{
+    $t = static fn ($v): string => normalize_optional($v ?? null) ?? '';
+    $pick = static function ($v, array $allowed, array $fallback) use ($t): string {
+        $v = $t($v);
+        return in_array($v, $allowed, true) ? $v : $fallback;
+    };
+    $money = static function ($v): float {
+        $v = normalize_optional($v ?? null);
+        return $v === null || $v === '' ? 0.0 : (float)preg_replace('/[^0-9.\-]/', '', (string)$v);
+    };
+    $flag = static fn ($v): int => (int)filter_var($v ?? false, FILTER_VALIDATE_BOOLEAN);
+
+    return [
+        'name' => $t($body['name'] ?? ''),
+        'code' => $t($body['code'] ?? ''),
+        'property_type' => $pick($body['property_type'] ?? '', PROPERTY_TYPES, 'Residential'),
+        'subtype' => $t($body['subtype'] ?? ''),
+        'purpose' => $pick($body['purpose'] ?? '', PROPERTY_PURPOSES, 'Sell'),
+        'floor' => $t($body['floor'] ?? ''),
+        'block' => $t($body['block'] ?? ''),
+        'registration_no' => $t($body['registration_no'] ?? ''),
+        'current_status' => $pick($body['current_status'] ?? '', PROPERTY_SALE_STATUSES, 'UnSold'),
+        'status' => $pick($body['status'] ?? '', PROPERTY_STATUSES, 'Active'),
+        'sale_price' => $money($body['sale_price'] ?? 0),
+        'currency' => $pick($body['currency'] ?? '', PROPERTY_CURRENCIES, 'PKR'),
+        'installment_available' => $flag($body['installment_available'] ?? false),
+        'ready_for_possession' => $flag($body['ready_for_possession'] ?? false),
+        'bedrooms' => $t($body['bedrooms'] ?? ''),
+        'bathrooms' => $t($body['bathrooms'] ?? ''),
+        'amenities' => mb_substr($t($body['amenities'] ?? ''), 0, 500),
+        'video_url' => mb_substr($t($body['video_url'] ?? ''), 0, 500),
+        'contact_email' => mb_substr($t($body['contact_email'] ?? ''), 0, 160),
+        'contact_mobile' => mb_substr($t($body['contact_mobile'] ?? ''), 0, 255),
+        'contact_landline' => mb_substr($t($body['contact_landline'] ?? ''), 0, 64),
+        'original_price' => $money($body['original_price'] ?? 0),
+        'discount' => $money($body['discount'] ?? 0),
+        'payment_plan' => $t($body['payment_plan'] ?? ''),
+        'customer' => $t($body['customer'] ?? ''),
+        'agent' => $t($body['agent'] ?? ''),
+        'sale_date' => $t($body['sale_date'] ?? '') ?: null,
+        'booking_date' => $t($body['booking_date'] ?? '') ?: null,
+        'transfer_status' => $t($body['transfer_status'] ?? '') ?: 'Not Initiated',
+        'transfer_date' => $t($body['transfer_date'] ?? '') ?: null,
+        'transfer_from' => $t($body['transfer_from'] ?? ''),
+        'transfer_to' => $t($body['transfer_to'] ?? ''),
+        'address' => $t($body['address'] ?? ''),
+        'city' => $t($body['city'] ?? ''),
+        'area' => $t($body['area'] ?? ''),
+        'size' => $t($body['size'] ?? ''),
+        'unit' => $t($body['unit'] ?? ''),
+        'description' => $t($body['description'] ?? ''),
+    ];
+}
+
+function property_payload(array $row): array
+{
+    $row['id'] = (int)$row['id'];
+    foreach (['sale_price', 'original_price', 'discount'] as $f) {
+        if (isset($row[$f])) $row[$f] = (float)$row[$f];
+    }
+    foreach (['installment_available', 'ready_for_possession'] as $f) {
+        if (isset($row[$f])) $row[$f] = (int)$row[$f];
+    }
+    return $row;
+}
+
+/** GET /properties?search=&property_type=&current_status=&status=&floor=&block= */
+function list_properties(array $filters): void
+{
+    ensure_properties_table();
+    $where = [];
+    $params = [];
+
+    if (!empty($filters['search'])) {
+        $term = '%' . $filters['search'] . '%';
+        $cols = ['name', 'code', 'registration_no', 'block', 'floor'];
+        $pats = [];
+        foreach ($cols as $i => $col) {
+            $p = ':s' . $i;
+            $params[$p] = $term;
+            $pats[] = "$col LIKE $p";
+        }
+        $where[] = '(' . implode(' OR ', $pats) . ')';
+    }
+    if (!empty($filters['property_type'])) {
+        $where[] = 'property_type = :ptype';
+        $params[':ptype'] = $filters['property_type'];
+    }
+    if (!empty($filters['current_status'])) {
+        $where[] = 'current_status = :cstatus';
+        $params[':cstatus'] = $filters['current_status'];
+    }
+    if (!empty($filters['status'])) {
+        $where[] = 'status = :pstatus';
+        $params[':pstatus'] = $filters['status'];
+    }
+    if (!empty($filters['floor'])) {
+        $where[] = 'floor = :floor';
+        $params[':floor'] = $filters['floor'];
+    }
+    if (!empty($filters['block'])) {
+        $where[] = 'block = :block';
+        $params[':block'] = $filters['block'];
+    }
+
+    $sql = 'SELECT * FROM properties';
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= ' ORDER BY id ASC';
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    respond(['data' => array_map('property_payload', $stmt->fetchAll()), 'count' => $stmt->rowCount()]);
+}
+
+/** POST /properties */
+function create_property(array $body): void
+{
+    ensure_properties_table();
+    $f = property_fields($body);
+    if ($f['name'] === '') fail('Property name is required');
+
+    $stmt = db()->prepare(
+        'INSERT INTO properties
+            (name, code, property_type, subtype, purpose, floor, block, registration_no,
+             current_status, status,
+             sale_price, currency, installment_available, ready_for_possession,
+             bedrooms, bathrooms, amenities, video_url,
+             contact_email, contact_mobile, contact_landline,
+             original_price, discount, payment_plan, customer, agent, sale_date,
+             booking_date, transfer_status, transfer_date, transfer_from, transfer_to,
+             address, city, area, size, unit, description)
+         VALUES (:name, :code, :ptype, :subtype, :purpose, :floor, :block, :reg, :cstatus, :status,
+                 :sale, :currency, :installment, :possession,
+                 :bedrooms, :bathrooms, :amenities, :video_url,
+                 :c_email, :c_mobile, :c_landline,
+                 :orig, :disc, :plan, :cust, :agent, :sale_date,
+                 :book_date, :tstatus, :tdate, :tfrom, :tto,
+                 :address, :city, :area, :size, :unit, :description)'
+    );
+    $stmt->execute([
+        ':name' => $f['name'], ':code' => $f['code'], ':ptype' => $f['property_type'],
+        ':subtype' => $f['subtype'], ':purpose' => $f['purpose'],
+        ':floor' => $f['floor'], ':block' => $f['block'], ':reg' => $f['registration_no'],
+        ':cstatus' => $f['current_status'], ':status' => $f['status'],
+        ':sale' => $f['sale_price'],
+        ':currency' => $f['currency'], ':installment' => $f['installment_available'],
+        ':possession' => $f['ready_for_possession'],
+        ':bedrooms' => $f['bedrooms'], ':bathrooms' => $f['bathrooms'],
+        ':amenities' => $f['amenities'], ':video_url' => $f['video_url'],
+        ':c_email' => $f['contact_email'], ':c_mobile' => $f['contact_mobile'],
+        ':c_landline' => $f['contact_landline'],
+        ':orig' => $f['original_price'], ':disc' => $f['discount'],
+        ':plan' => $f['payment_plan'], ':cust' => $f['customer'], ':agent' => $f['agent'],
+        ':sale_date' => $f['sale_date'], ':book_date' => $f['booking_date'],
+        ':tstatus' => $f['transfer_status'], ':tdate' => $f['transfer_date'],
+        ':tfrom' => $f['transfer_from'], ':tto' => $f['transfer_to'],
+        ':address' => $f['address'], ':city' => $f['city'], ':area' => $f['area'],
+        ':size' => $f['size'], ':unit' => $f['unit'], ':description' => $f['description'],
+    ]);
+
+    $get = db()->prepare('SELECT * FROM properties WHERE id = :id');
+    $get->execute([':id' => (int)db()->lastInsertId()]);
+    respond(['data' => property_payload($get->fetch() ?: []), 'message' => 'Property created'], 201);
+}
+
+/** PUT /properties/{id} */
+function update_property(int $id, array $body): void
+{
+    ensure_properties_table();
+    $exists = db()->prepare('SELECT id FROM properties WHERE id = :id');
+    $exists->execute([':id' => $id]);
+    if ($exists->fetchColumn() === false) fail('Property not found', 404);
+
+    $f = property_fields($body);
+    if ($f['name'] === '') fail('Property name is required');
+
+    $sets = [];
+    $params = [':id' => $id];
+    foreach ($f as $col => $val) {
+        $sets[] = "$col = :$col";
+        $params[":$col"] = $val;
+    }
+
+    db()->prepare('UPDATE properties SET ' . implode(', ', $sets) . ' WHERE id = :id')->execute($params);
+
+    $get = db()->prepare('SELECT * FROM properties WHERE id = :id');
+    $get->execute([':id' => $id]);
+    respond(['data' => property_payload($get->fetch() ?: []), 'message' => 'Property updated']);
+}
+
+/** DELETE /properties/{id} */
+function delete_property(int $id): void
+{
+    ensure_properties_table();
+    $stmt = db()->prepare('DELETE FROM properties WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+    if ($stmt->rowCount() === 0) fail('Property not found', 404);
+    respond(['message' => 'Property deleted']);
+}
+
+/** Max size (bytes) accepted for a single property image. */
+const PROPERTY_IMAGE_MAX_BYTES = 5242880; // 5 MB
+
+/** Create the property_images table on first use so no manual SQL step is required. */
+function ensure_property_images_table(): void
+{
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS property_images (
+            id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            property_id INT          NOT NULL,
+            name        VARCHAR(255) NOT NULL DEFAULT '',
+            size        INT UNSIGNED NOT NULL DEFAULT 0,
+            mime        VARCHAR(150) NOT NULL DEFAULT '',
+            data        LONGTEXT     NOT NULL,
+            created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_image_property (property_id),
+            CONSTRAINT fk_image_property FOREIGN KEY (property_id)
+              REFERENCES properties(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+}
+
+function ensure_property_exists(int $propertyId): void
+{
+    ensure_properties_table();
+    $exists = db()->prepare('SELECT id FROM properties WHERE id = :id');
+    $exists->execute([':id' => $propertyId]);
+    if ($exists->fetchColumn() === false) fail('Property not found', 404);
+}
+
+/** GET /properties/{id}/images — metadata only, never the image bytes. */
+function list_property_images(int $propertyId): void
+{
+    ensure_property_images_table();
+    ensure_property_exists($propertyId);
+    $stmt = db()->prepare(
+        'SELECT id, property_id, name, size, mime, created_at
+           FROM property_images
+          WHERE property_id = :id
+          ORDER BY id ASC'
+    );
+    $stmt->execute([':id' => $propertyId]);
+    respond(['data' => $stmt->fetchAll(), 'count' => $stmt->rowCount()]);
+}
+
+/** POST /properties/{id}/images — store an uploaded image as a base64 data URI. */
+function create_property_image(int $propertyId, array $body): void
+{
+    ensure_property_images_table();
+    ensure_property_exists($propertyId);
+
+    $data = (string)($body['data'] ?? '');
+    if ($data === '' || !preg_match('~^data:image/[a-zA-Z0-9.+-]+;base64,~', $data)) {
+        fail('Valid base64 image data URI required');
+    }
+
+    $comma = strpos($data, ',');
+    $b64 = $comma !== false ? substr($data, $comma + 1) : '';
+    if ($b64 === '') fail('Image payload is empty');
+
+    // Guard against oversized uploads before decoding (base64 is ~4/3 the size).
+    if ((strlen($b64) * 3) / 4 > PROPERTY_IMAGE_MAX_BYTES + 1024) {
+        fail('Image too large (max 5 MB)');
+    }
+
+    $bytes = base64_decode($b64, true);
+    if ($bytes === false) fail('Image payload is not valid base64');
+    $actualSize = strlen($bytes);
+    if ($actualSize > PROPERTY_IMAGE_MAX_BYTES) fail('Image too large (max 5 MB)');
+
+    $mime = strtolower(substr($data, 5, (int)strpos($data, ';') - 5));
+    $stmt = db()->prepare(
+        'INSERT INTO property_images (property_id, name, size, mime, data)
+              VALUES (:pid, :name, :size, :mime, :data)'
+    );
+    $stmt->execute([
+        ':pid' => $propertyId,
+        ':name' => mb_substr((string)($body['name'] ?? ''), 0, 255),
+        ':size' => $actualSize,
+        ':mime' => $mime,
+        ':data' => $data,
+    ]);
+
+    respond(['data' => ['id' => (int)db()->lastInsertId()], 'message' => 'Image uploaded'], 201);
+}
+
+/** GET /properties/{id}/images/{imageId} — the raw image bytes. */
+function get_property_image(int $propertyId, int $imageId): void
+{
+    ensure_property_images_table();
+    $stmt = db()->prepare(
+        'SELECT name, mime, data FROM property_images WHERE id = :id AND property_id = :pid'
+    );
+    $stmt->execute([':id' => $imageId, ':pid' => $propertyId]);
+    $row = $stmt->fetch();
+    if (!$row) fail('Image not found', 404);
+    respond(['data' => $row['data'], 'mime' => $row['mime'], 'name' => $row['name']]);
+}
+
+/** DELETE /properties/{id}/images/{imageId} */
+function delete_property_image(int $propertyId, int $imageId): void
+{
+    ensure_property_images_table();
+    $stmt = db()->prepare('DELETE FROM property_images WHERE id = :id AND property_id = :pid');
+    $stmt->execute([':id' => $imageId, ':pid' => $propertyId]);
+    if ($stmt->rowCount() === 0) fail('Image not found', 404);
+    respond(['message' => 'Image deleted']);
+}
+
 /**
  * Repair contacts whose name fell back to "Imported Lead".
  * Their real name lives inside custom_fields.import_data (and, for very old
@@ -4676,6 +5157,40 @@ switch ($resource) {
         } elseif ($method === 'DELETE') {
             if (!$parts[1]) fail('Submission id required');
             delete_submission(to_int($parts[1]));
+        }
+        break;
+
+    case 'properties':
+        if ($method === 'GET') {
+            $propId = $parts[1] ?? null;
+            if ($propId && ($parts[2] ?? null) === 'images') {
+                if ($parts[3] ?? null) get_property_image(to_int($propId), to_int($parts[3]));
+                list_property_images(to_int($propId));
+            }
+            if ($propId) {
+                $get = db()->prepare('SELECT * FROM properties WHERE id = :id');
+                $get->execute([':id' => to_int((string)$propId)]);
+                $row = $get->fetch();
+                if (!$row) fail('Property not found', 404);
+                respond(['data' => property_payload($row)]);
+            }
+            list_properties($filters);
+        } elseif ($method === 'POST') {
+            if (($parts[2] ?? null) === 'images' && ($parts[1] ?? null)) {
+                create_property_image(to_int($parts[1]), json_body());
+                break;
+            }
+            create_property(json_body());
+        } elseif ($method === 'PUT') {
+            if (!($parts[1] ?? null)) fail('Property id required');
+            update_property(to_int($parts[1]), json_body());
+        } elseif ($method === 'DELETE') {
+            if (!($parts[1] ?? null)) fail('Property id required');
+            if (($parts[2] ?? null) === 'images' && ($parts[3] ?? null)) {
+                delete_property_image(to_int($parts[1]), to_int($parts[3]));
+                break;
+            }
+            delete_property(to_int($parts[1]));
         }
         break;
 

@@ -36,6 +36,9 @@ import ReceiptVoucherPage from './components/ReceiptVoucherPage';
 import AccountStatementPage from './components/AccountStatementPage';
 import DealershipApplicationsPage from './components/DealershipApplicationsPage';
 import CustomerInquiriesPage from './components/CustomerInquiriesPage';
+import PropertyPage from './components/PropertyPage';
+import PropertyCreatePage from './components/PropertyCreatePage';
+import PropertyDetailsPage from './components/PropertyDetailsPage';
 import {
   PublicDealershipFormPage,
   PublicInquiryFormPage,
@@ -213,6 +216,8 @@ function App() {
     ? 'Receipt Voucher'
     : route.name === 'account-statements'
     ? 'Account Statement'
+    : route.name === 'property' || route.name === 'property-new' || route.name === 'property-detail'
+    ? 'Property'
     : route.name === 'dealership-portal'
     ? 'Dealership Page'
     : route.name === 'inquiries-portal'
@@ -281,6 +286,10 @@ function App() {
       }
       if (label === 'Customer Inquiries') {
         navigate({ name: 'inquiries-portal' });
+        return;
+      }
+      if (label === 'Property') {
+        navigate({ name: 'property' });
         return;
       }
       showToast(`"${label}" page coming soon`);
@@ -1279,6 +1288,8 @@ const handleAddSmartList = async (list: Omit<SmartList, 'id' | 'members'>) => {
       ? 'invoices'
       : route.name === 'account-statements'
       ? 'invoices'
+      : route.name === 'property' || route.name === 'property-new' || route.name === 'property-detail'
+      ? 'opportunities'
       : route.name === 'dealership-portal'
       ? 'dashboard'
       : route.name === 'inquiries-portal'
@@ -1401,6 +1412,51 @@ const handleAddSmartList = async (list: Omit<SmartList, 'id' | 'members'>) => {
           />
           <main className="flex-1 min-w-0 h-full overflow-hidden">
             <AccountStatementPage onNotify={showToast} />
+          </main>
+        </div>
+      ) : route.name === 'property' ? (
+        <div className="flex h-screen w-full overflow-hidden select-none bg-slate-100">
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            mobileOpen={sidebarMobileOpen}
+            activeNav={activeNav}
+            onNavigate={handleNav}
+            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+            onMobileClose={() => setSidebarMobileOpen(false)}
+            onLogout={logout}
+          />
+          <main className="flex-1 min-w-0 h-full overflow-y-auto">
+            <PropertyPage onNotify={showToast} />
+          </main>
+        </div>
+      ) : route.name === 'property-new' ? (
+        <div className="flex h-screen w-full overflow-hidden select-none bg-slate-100">
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            mobileOpen={sidebarMobileOpen}
+            activeNav={activeNav}
+            onNavigate={handleNav}
+            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+            onMobileClose={() => setSidebarMobileOpen(false)}
+            onLogout={logout}
+          />
+          <main className="flex-1 min-w-0 h-full overflow-y-auto">
+            <PropertyCreatePage onNotify={showToast} />
+          </main>
+        </div>
+      ) : route.name === 'property-detail' ? (
+        <div className="flex h-screen w-full overflow-hidden select-none bg-slate-100">
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            mobileOpen={sidebarMobileOpen}
+            activeNav={activeNav}
+            onNavigate={handleNav}
+            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+            onMobileClose={() => setSidebarMobileOpen(false)}
+            onLogout={logout}
+          />
+          <main className="flex-1 min-w-0 h-full overflow-y-auto">
+            <PropertyDetailsPage id={route.id} onNotify={showToast} />
           </main>
         </div>
       ) : route.name === 'dealership-portal' ? (

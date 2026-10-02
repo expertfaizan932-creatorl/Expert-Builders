@@ -12,6 +12,9 @@
  *   #/dashboard       -> Dealer / Franchise dashboard (owner vs user views)
  *   #/invoices        -> Expert Builders Receipt Voucher generator
  *   #/account-statements -> Expert Builders Account Statement ledger
+ *   #/property        -> Property Management list page
+ *   #/property-new    -> Add Property page (full page, not a modal)
+ *   #/property-detail/:id -> single Property detail page
  */
 
 export type Route =
@@ -24,6 +27,9 @@ export type Route =
   | { name: 'automation' }
   | { name: 'invoices' }
   | { name: 'account-statements' }
+  | { name: 'property' }
+  | { name: 'property-new' }
+  | { name: 'property-detail'; id: number }
   | { name: 'dealership-portal' }
   | { name: 'inquiries-portal' }
   | { name: 'dealership-form' }
@@ -66,6 +72,15 @@ export function parseHash(): Route {
     case 'account-statements':
     case 'account-statement':
       return { name: 'account-statements' };
+    case 'property':
+      return { name: 'property' };
+    case 'property-new':
+      return { name: 'property-new' };
+    case 'property-detail': {
+      const pid = Number(idPart);
+      if (Number.isInteger(pid) && pid > 0) return { name: 'property-detail', id: pid };
+      return { name: 'property' };
+    }
     case 'dealership-portal':
       return { name: 'dealership-portal' };
     case 'inquiries-portal':
@@ -109,6 +124,12 @@ export function routeToHash(route: Route): string {
       return '#/invoices';
     case 'account-statements':
       return '#/account-statements';
+    case 'property':
+      return '#/property';
+    case 'property-new':
+      return '#/property-new';
+    case 'property-detail':
+      return `#/property-detail/${route.id}`;
     case 'dealership-portal':
       return '#/dealership-portal';
     case 'inquiries-portal':

@@ -247,12 +247,18 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
     id: 'opportunities',
     label: 'Opportunities',
     icon: 'chart-line',
-    features: fromItems([
-      'View & manage opportunities',
-      'View opportunities lead value',
-      'View and manage bulk actions',
-      'Create pipeline',
-    ]),
+    features: [
+      ...fromItems([
+        'View & manage opportunities',
+        'View opportunities lead value',
+        'View and manage bulk actions',
+        'Create pipeline',
+      ]),
+      {
+        label: 'Property',
+        actions: ['view', 'add', 'edit', 'delete', 'export'] as PermAction[],
+      },
+    ],
   },
   {
     id: 'orders',

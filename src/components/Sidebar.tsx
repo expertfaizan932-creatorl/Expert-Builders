@@ -28,6 +28,7 @@ import {
   FaBookOpen,
   FaStore,
   FaHeadset,
+  FaBuilding,
 } from 'react-icons/fa6';
 import BrandLogo from './BrandLogo';
 import { useAuth } from '../auth';
@@ -49,6 +50,7 @@ const primaryNav: NavItem[] = [
   { label: 'Calendars', icon: FaRegCalendar, perm: 'calendars' },
   { label: 'Contacts', icon: FaAddressBook, perm: 'contacts' },
   { label: 'Opportunities', icon: FaDiagramProject, perm: 'opportunities' },
+  { label: 'Property', icon: FaBuilding, perm: 'opportunities' },
   { label: 'Payments', icon: FaRegCreditCard, perm: 'payments' },
   { label: 'Receipt Voucher', icon: FaFileInvoice, perm: 'invoices' },
   { label: 'Account Statement', icon: FaBookOpen, perm: 'invoices' },
