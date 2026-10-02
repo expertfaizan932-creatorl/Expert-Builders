@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FaArrowLeft,
   FaBuilding,
@@ -6,6 +6,7 @@ import {
   FaFileLines,
   FaPen,
   FaRegTrashCan,
+  FaXmark,
 } from 'react-icons/fa6';
 import { api, type Property } from '../api';
 import { navigate } from '../router';
@@ -99,6 +100,16 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const nameInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renaming) {
+      nameInput.current?.focus();
+      nameInput.current?.select();
+    }
+  }, [renaming]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,6 +138,18 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
       onNotify((err as Error).message || 'Could not save property');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRename = async (next: string) => {
+    const name = next.trim();
+    if (!name || !property || name === property.name) return;
+    try {
+      const res = await api.updateProperty(id, { name } as Partial<Property>);
+      setProperty(res.data ?? null);
+      onNotify('Property name updated');
+    } catch (err) {
+      onNotify((err as Error).message || 'Could not rename property');
     }
   };
 
@@ -181,6 +204,17 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
           <span className="text-slate-800 border-b-2 border-blue-600 h-full flex items-center px-1 font-semibold select-none truncate">
             {p.name}
           </span>
+          <button
+            onClick={() => {
+              setNameDraft(p.name);
+              setRenaming(true);
+            }}
+            aria-label="Edit property name"
+            title="Edit name"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-blue-50 hover:text-brand-blue"
+          >
+            <FaPen className="text-[10px]" />
+          </button>
           <StatusBadge value={p.status} />
         </div>
 
@@ -219,7 +253,58 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
               <div className="flex items-center gap-3">
                 <PropertyAvatar name={p.name} size="lg" />
                 <div className="min-w-0">
-                  <div className="truncate text-lg font-bold text-slate-900">{p.name}</div>
+                  {renaming ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={nameInput}
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            void handleRename(nameDraft);
+                            setRenaming(false);
+                          }
+                          if (e.key === 'Escape') setRenaming(false);
+                        }}
+                        aria-label="Property name"
+                        className="w-full max-w-xs rounded-lg border border-brand-blue px-3 py-1.5 text-base font-bold text-slate-900 outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          void handleRename(nameDraft);
+                          setRenaming(false);
+                        }}
+                        aria-label="Save name"
+                        title="Save"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-blue text-white transition hover:bg-brand-dark"
+                      >
+                        <FaPen className="text-[10px]" />
+                      </button>
+                      <button
+                        onClick={() => setRenaming(false)}
+                        aria-label="Cancel rename"
+                        title="Cancel"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition hover:bg-slate-50"
+                      >
+                        <FaXmark className="text-[10px]" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="truncate text-lg font-bold text-slate-900">{p.name}</div>
+                      <button
+                        onClick={() => {
+                          setNameDraft(p.name);
+                          setRenaming(true);
+                        }}
+                        aria-label="Edit property name"
+                        title="Edit name"
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-blue-50 hover:text-brand-blue"
+                      >
+                        <FaPen className="text-[10px]" />
+                      </button>
+                    </div>
+                  )}
                   <div className="truncate text-xs text-slate-500">
                     {[p.floor, p.block].filter(Boolean).join(' • ') || '—'}
                   </div>

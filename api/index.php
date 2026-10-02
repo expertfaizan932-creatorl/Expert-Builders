@@ -4613,11 +4613,14 @@ function create_property(array $body): void
 function update_property(int $id, array $body): void
 {
     ensure_properties_table();
-    $exists = db()->prepare('SELECT id FROM properties WHERE id = :id');
+    $exists = db()->prepare('SELECT * FROM properties WHERE id = :id');
     $exists->execute([':id' => $id]);
-    if ($exists->fetchColumn() === false) fail('Property not found', 404);
+    $current = $exists->fetch();
+    if (!$current) fail('Property not found', 404);
 
-    $f = property_fields($body);
+    /* Partial update: anything absent from the body keeps its stored value, so a
+       rename (or any single field edit) cannot wipe the rest of the listing. */
+    $f = property_fields(array_merge($current, $body));
     if ($f['name'] === '') fail('Property name is required');
 
     $sets = [];
