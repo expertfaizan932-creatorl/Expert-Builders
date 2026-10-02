@@ -39,6 +39,7 @@ interface FormState {
   email: string;
   mobiles: string[];
   landline: string;
+  coords: { lat: number; lng: number; label: string } | null;
 }
 
 const EMPTY: FormState = {
@@ -63,6 +64,7 @@ const EMPTY: FormState = {
   email: '',
   mobiles: ['+92 '],
   landline: '+92 ',
+  coords: null,
 };
 
 /** Title doubles as the property name the backend requires. */
@@ -114,6 +116,8 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         area: form.area.trim(),
         size: form.size.trim(),
         unit: form.unit,
+        latitude: form.coords?.lat ?? null,
+        longitude: form.coords?.lng ?? null,
         sale_price: Number(form.price.replace(/,/g, '')) || 0,
         currency: form.currency,
         installment_available: form.installment ? 1 : 0,
@@ -200,6 +204,8 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             onCity={(v) => set('city', v)}
             location={form.area}
             onLocation={(v) => set('area', v)}
+            coords={form.coords}
+            onCoords={(v) => set('coords', v)}
           />
 
           <div className="my-8 h-px bg-slate-200" />

@@ -566,6 +566,8 @@ export interface Property {
   area: string;
   size: string;
   unit: string;
+  latitude: number | null;
+  longitude: number | null;
   description: string | null;
   created_at: string | null;
 }

@@ -4287,6 +4287,8 @@ function ensure_properties_table(): void
             area VARCHAR(120) DEFAULT "",
             size VARCHAR(64) DEFAULT "",
             unit VARCHAR(64) DEFAULT "",
+            latitude DECIMAL(10,7) NULL,
+            longitude DECIMAL(10,7) NULL,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_prop_status (status),
@@ -4348,6 +4350,18 @@ function ensure_properties_table(): void
         db()->exec('ALTER TABLE properties ADD COLUMN contact_landline VARCHAR(64) DEFAULT "" AFTER contact_mobile');
     }
 
+    $geoCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'latitude'"
+    );
+    $geoCheck->execute();
+    if ((int)$geoCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN latitude DECIMAL(10,7) NULL AFTER unit');
+        db()->exec('ALTER TABLE properties ADD COLUMN longitude DECIMAL(10,7) NULL AFTER latitude');
+    }
+
     // No starter inventory: the table stays empty until a property is added.
 }
 
@@ -4364,6 +4378,11 @@ function property_fields(array $body): array
         return $v === null || $v === '' ? 0.0 : (float)preg_replace('/[^0-9.\-]/', '', (string)$v);
     };
     $flag = static fn ($v): int => (int)filter_var($v ?? false, FILTER_VALIDATE_BOOLEAN);
+    $coord = static function ($v): ?float {
+        if ($v === null || $v === '') return null;
+        $n = (float)$v;
+        return is_finite($n) ? $n : null;
+    };
 
     return [
         'name' => $t($body['name'] ?? ''),
@@ -4403,6 +4422,8 @@ function property_fields(array $body): array
         'area' => $t($body['area'] ?? ''),
         'size' => $t($body['size'] ?? ''),
         'unit' => $t($body['unit'] ?? ''),
+        'latitude' => $coord($body['latitude'] ?? null),
+        'longitude' => $coord($body['longitude'] ?? null),
         'description' => $t($body['description'] ?? ''),
     ];
 }
@@ -4415,6 +4436,9 @@ function property_payload(array $row): array
     }
     foreach (['installment_available', 'ready_for_possession'] as $f) {
         if (isset($row[$f])) $row[$f] = (int)$row[$f];
+    }
+    foreach (['latitude', 'longitude'] as $f) {
+        if (isset($row[$f])) $row[$f] = $row[$f] === null ? null : (float)$row[$f];
     }
     return $row;
 }
@@ -4483,14 +4507,14 @@ function create_property(array $body): void
              contact_email, contact_mobile, contact_landline,
              original_price, discount, payment_plan, customer, agent, sale_date,
              booking_date, transfer_status, transfer_date, transfer_from, transfer_to,
-             address, city, area, size, unit, description)
+             address, city, area, size, unit, latitude, longitude, description)
          VALUES (:name, :code, :ptype, :subtype, :purpose, :floor, :block, :reg, :cstatus, :status,
                  :sale, :currency, :installment, :possession,
                  :bedrooms, :bathrooms, :amenities, :video_url,
                  :c_email, :c_mobile, :c_landline,
                  :orig, :disc, :plan, :cust, :agent, :sale_date,
                  :book_date, :tstatus, :tdate, :tfrom, :tto,
-                 :address, :city, :area, :size, :unit, :description)'
+                 :address, :city, :area, :size, :unit, :latitude, :longitude, :description)'
     );
     $stmt->execute([
         ':name' => $f['name'], ':code' => $f['code'], ':ptype' => $f['property_type'],
@@ -4510,7 +4534,9 @@ function create_property(array $body): void
         ':tstatus' => $f['transfer_status'], ':tdate' => $f['transfer_date'],
         ':tfrom' => $f['transfer_from'], ':tto' => $f['transfer_to'],
         ':address' => $f['address'], ':city' => $f['city'], ':area' => $f['area'],
-        ':size' => $f['size'], ':unit' => $f['unit'], ':description' => $f['description'],
+        ':size' => $f['size'], ':unit' => $f['unit'],
+        ':latitude' => $f['latitude'], ':longitude' => $f['longitude'],
+        ':description' => $f['description'],
     ]);
 
     $get = db()->prepare('SELECT * FROM properties WHERE id = :id');

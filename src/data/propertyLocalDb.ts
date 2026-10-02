@@ -86,6 +86,8 @@ function blank(id: number): Property {
     area: '',
     size: '',
     unit: '',
+    latitude: null,
+    longitude: null,
     description: null,
     created_at: new Date().toISOString(),
   };

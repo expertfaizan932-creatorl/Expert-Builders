@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { IconType } from 'react-icons';
 import {
   HiOutlineBeaker,
@@ -18,6 +18,8 @@ import {
   HiOutlineWrenchScrewdriver,
 } from 'react-icons/hi2';
 import type { PropertyPurpose, PropertyType } from '../../api';
+import { geocode, cityCentre, type LatLng } from '../../data/geo';
+import LocationMap from './LocationMap';
 import { CARET_CLS, FIELD_CLS, STEP_ICON_CLS, STEP_LABEL_CLS } from './PropertyBadges';
 
 /** Which purpose the listing is for — Sell / Rent. */
@@ -114,15 +116,6 @@ const pillBase =
 const pillOn = `${pillBase} border-2 border-brand-blue bg-white text-brand-blue font-semibold shadow-sm`;
 const pillOff = `${pillBase} border border-transparent bg-slate-100 text-slate-700 font-medium hover:bg-slate-200`;
 
-/** Dotted "map" canvas used as the location preview. */
-const mapGridStyle = {
-  backgroundColor: '#f3f4f6',
-  backgroundImage:
-    'radial-gradient(#e5e7eb 1.5px, transparent 1.5px), radial-gradient(#e5e7eb 1.5px, #f3f4f6 1.5px)',
-  backgroundSize: '30px 30px',
-  backgroundPosition: '0 0, 15px 15px',
-} as const;
-
 interface Props {
   purpose: PropertyPurpose;
   onPurpose: (v: PropertyPurpose) => void;
@@ -134,6 +127,8 @@ interface Props {
   onCity: (v: string) => void;
   location: string;
   onLocation: (v: string) => void;
+  coords?: LatLng | null;
+  onCoords?: (v: LatLng | null) => void;
 }
 
 /** "Location and Purpose" — purpose pills, property-type tabs, city and location. */
@@ -148,24 +143,62 @@ export default function PropertyLocationPurpose({
   onCity,
   location,
   onLocation,
+  coords = null,
+  onCoords,
 }: Props) {
   const [picking, setPicking] = useState(false);
-  const [pin, setPin] = useState<{ x: number; y: number } | null>(null);
+  const [resolved, setResolved] = useState<LatLng | null>(null);
+  const [looking, setLooking] = useState(false);
+
+  // Keep the newest values readable from the debounce effect without
+  // re-triggering a lookup on every keystroke of an unrelated field.
+  const latest = useRef({ area: location, city });
+  latest.current = { area: location, city };
+
+  // Every city/area change re-centres the map on the chosen place.
+  useEffect(() => {
+    const area = location.trim();
+    const town = city.trim();
+    if (!area && !town) {
+      setResolved(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLooking(true);
+    const timer = window.setTimeout(async () => {
+      // A bare city change should not wait on the network.
+      if (!area) {
+        const centre = cityCentre(latest.current.city);
+        if (!cancelled && centre) setResolved(centre);
+        setLooking(false);
+        return;
+      }
+      const hit = await geocode(latest.current.area, latest.current.city);
+      if (cancelled) return;
+      if (hit) {
+        setResolved(hit);
+        onCoords?.(hit);
+      }
+      setLooking(false);
+    }, area ? 450 : 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [location, city, onCoords]);
 
   const active = PURPOSE_CATEGORIES.find((c) => c.key === category) ?? PURPOSE_CATEGORIES[0];
 
   // Older records can carry a city that isn't in the list — keep it selectable.
   const cityOptions = city && !CITIES.includes(city) ? [city, ...CITIES] : CITIES;
 
-  const dropPin = (e: MouseEvent<HTMLDivElement>) => {
-    if (!picking) return;
-    const box = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - box.left) / box.width) * 100;
-    const y = ((e.clientY - box.top) / box.height) * 100;
-    setPin({
-      x: Math.min(94, Math.max(6, x)),
-      y: Math.min(88, Math.max(12, y)),
-    });
+  const placePin = (lat: number, lng: number) => {
+    const point: LatLng = { lat, lng, label: location.trim() || city.trim() };
+    setResolved(point);
+    onCoords?.(point);
+    setPicking(false);
   };
 
   return (
@@ -308,41 +341,26 @@ export default function PropertyLocationPurpose({
                 className="w-full rounded-lg border border-transparent bg-slate-100 px-4 py-3 pr-11 text-sm text-slate-700 shadow-sm transition-all placeholder-slate-400 outline-none focus:border-brand-blue focus:bg-white focus:text-slate-800"
               />
               <div className={CARET_CLS}>
-                <HiOutlineChevronDown className="h-4 w-4" />
+                {looking ? (
+                  <svg className="h-4 w-4 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <HiOutlineChevronDown className="h-4 w-4" />
+                )}
               </div>
             </div>
 
-            <div
-              onClick={dropPin}
-              className={`relative flex h-44 w-full items-center justify-center overflow-hidden rounded-xl border border-slate-100 shadow-inner ${picking ? 'cursor-crosshair ring-2 ring-brand-blue/40' : ''}`}
-              style={mapGridStyle}
-            >
-              {/* Road network hint */}
-              <svg
-                className="pointer-events-none absolute inset-0 h-full w-full opacity-30"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path d="M -50,50 Q 150,120 400,20" stroke="#d1d5db" strokeWidth="12" fill="none" />
-                <path d="M 200,-20 Q 220,100 250,220" stroke="#d1d5db" strokeWidth="8" fill="none" />
-                <path d="M 50,180 Q 250,130 500,160" stroke="#ffffff" strokeWidth="6" fill="none" />
-              </svg>
+            {/* Map — flies to the selected city / location on its own */}
+            <div className="relative">
+              <LocationMap
+                focus={coords ?? resolved}
+                picking={picking}
+                onPick={(point) => placePin(point.lat, point.lng)}
+              />
 
-              {picking ? (
-                <span className="relative z-10 rounded-full bg-slate-900/85 px-3 py-1.5 text-[11px] font-semibold text-white">
-                  Click the map to drop the pin
-                </span>
-              ) : pin ? (
-                <span
-                  className="absolute z-10 -translate-x-1/2 -translate-y-full text-brand-blue drop-shadow-md"
-                  style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
-                >
-                  <HiOutlineMapPin className="h-9 w-9" />
-                </span>
-              ) : (
-                <HiOutlineMapPin className="relative z-10 h-9 w-9 text-brand-blue drop-shadow-md" />
-              )}
-
-              <div className="absolute bottom-3 left-3 z-10">
+              <div className="absolute bottom-3 left-3 z-[500] flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setPicking((v) => !v)}
@@ -357,6 +375,16 @@ export default function PropertyLocationPurpose({
                   />
                   <span>{picking ? 'Cancel' : 'Set Location on Map'}</span>
                 </button>
+
+                {(coords ?? resolved) && (
+                  <span className="rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
+                    {city || '—'}
+                    {location ? ` • ${location}` : ''}
+                    <span className="ml-1.5 text-slate-400">
+                      {(coords ?? resolved)!.lat.toFixed(4)}, {(coords ?? resolved)!.lng.toFixed(4)}
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
