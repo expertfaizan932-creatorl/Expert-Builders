@@ -317,17 +317,13 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
               <Field label="Original Price" value={fmtPrice(p.original_price)} />
               <Field label="Discount" value={fmtPrice(p.discount)} />
               <Field label="Final Price" value={fmtPrice(finalPrice)} />
-<Field label="Payment Plan" value={p.payment_plan} />
+              <Field label="Payment Plan" value={p.payment_plan} />
               <Field label="Installment Available" value={Number(p.installment_available) === 1 ? 'Yes' : 'No'} />
               {Number(p.installment_available) === 1 && (
                 <>
-                  <Field label="Advance Amount" value={`${fmtPrice(p.advance_amount)} ${p.advance_currency || 'PKR'}`} />
+                  <Field label="Advance Amount" value={`${fmtPrice(p.advance_amount)} ${p.currency}`} />
                   <Field label="No of Installments" value={p.installment_count || '-'} />
-                  <Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.monthly_currency || 'PKR'}`} />
-                  <Field
-                    label="Estimated Total"
-                    value={`${fmtPrice(Number(p.advance_amount || 0) + Number(p.installment_count || 0) * Number(p.monthly_installment || 0))} ${p.advance_currency || 'PKR'}`}
-                  />
+                  <Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.currency}`} />
                 </>
               )}
               <Field label="Ready for Possession" value={Number(p.ready_for_possession) === 1 ? 'Yes' : 'No'} />
@@ -375,17 +371,13 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
             <Field label="Original Price" value={fmtPrice(p.original_price)} />
             <Field label="Discount" value={fmtPrice(p.discount)} />
             <Field label="Final Price" value={fmtPrice(finalPrice)} />
-<Field label="Payment Plan" value={p.payment_plan} />
+            <Field label="Payment Plan" value={p.payment_plan} />
             <Field label="Installment Available" value={Number(p.installment_available) === 1 ? 'Yes' : 'No'} />
             {Number(p.installment_available) === 1 && (
               <>
-                <Field label="Advance Amount" value={`${fmtPrice(p.advance_amount)} ${p.advance_currency || 'PKR'}`} />
+                <Field label="Advance Amount" value={`${fmtPrice(p.advance_amount)} ${p.currency}`} />
                 <Field label="No of Installments" value={p.installment_count || '-'} />
-                <Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.monthly_currency || 'PKR'}`} />
-                <Field
-                  label="Estimated Total"
-                  value={`${fmtPrice(Number(p.advance_amount || 0) + Number(p.installment_count || 0) * Number(p.monthly_installment || 0))} ${p.advance_currency || 'PKR'}`}
-                />
+                <Field label="Monthly Installments" value={`${fmtPrice(p.monthly_installment)} ${p.currency}`} />
               </>
             )}
             <Field label="Ready for Possession" value={Number(p.ready_for_possession) === 1 ? 'Yes' : 'No'} />

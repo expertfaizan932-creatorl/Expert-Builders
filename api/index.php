@@ -372,7 +372,7 @@ function create_contact(array $body): void
             }
 
             // This lead already existed (matched by email/phone) and re-submitted
-            // the form â€” tag it so the repeat submission is visible at a glance.
+            // the form — tag it so the repeat submission is visible at a glance.
             $repeatTagId = ensure_tag($pdo, 'Form Re-submitted');
             if ($repeatTagId > 0) {
                 $pdo->prepare('INSERT IGNORE INTO contact_tags (contact_id, tag_id) VALUES (:c, :t)')
@@ -514,7 +514,7 @@ function list_workflows(array $filters): void
     respond(['data' => $rows, 'count' => count($rows)]);
 }
 
-/** LEADS ONLY â€” quick way to find leads. */
+/** LEADS ONLY — quick way to find leads. */
 function list_leads(array $filters): void
 {
     $params = [];
@@ -1618,10 +1618,10 @@ function send_dealer_registration_mail(string $email, string $name, ?string $pla
     }
 
     if ($approved) {
-        $html .= '<p ' . $p . '>Your account is already <strong style="color:#059669;">active</strong> â€” you can log in anytime using the details above.</p>';
+        $html .= '<p ' . $p . '>Your account is already <strong style="color:#059669;">active</strong> — you can log in anytime using the details above.</p>';
     } else {
         $html .= '<p ' . $p . '>Your account is currently <strong style="color:#B45309;">pending administrator approval</strong>. '
-            . 'Login stays disabled until our team approves your registration â€” you will receive a second email '
+            . 'Login stays disabled until our team approves your registration — you will receive a second email '
             . 'with a login button as soon as that happens.</p>';
     }
 
@@ -2826,7 +2826,7 @@ function create_form(array $body): void
     respond(['data' => form_payload($stmt->fetch() ?: ['id' => $id]), 'message' => 'Form saved'], 201);
 }
 
-/** PUT /forms/{id} â€” full update of the builder form. */
+/** PUT /forms/{id} — full update of the builder form. */
 function update_form(int $id, array $body): void
 {
     ensure_forms_table();
@@ -3026,7 +3026,7 @@ function invoice_columns(array $body): array
     ];
 }
 
-/** POST /invoices â€” save a new sales tax invoice. */
+/** POST /invoices — save a new sales tax invoice. */
 function create_invoice(array $body): void
 {
     ensure_invoices_table();
@@ -3074,7 +3074,7 @@ function create_invoice(array $body): void
     respond(['data' => invoice_payload($get->fetch() ?: ['id' => $id]), 'message' => 'Invoice saved'], 201);
 }
 
-/** PUT /invoices/{id} â€” update an existing sales tax invoice. */
+/** PUT /invoices/{id} — update an existing sales tax invoice. */
 function update_invoice(int $id, array $body): void
 {
     ensure_invoices_table();
@@ -3297,7 +3297,7 @@ function ensure_statement_for_receipt(array $c, ?int $createdBy, int $receiptId 
     $createdNew = $sid === 0;
 
     if ($createdNew) {
-        // No statement yet â€” create one from the receipt voucher's member.
+        // No statement yet — create one from the receipt voucher's member.
         $fileNo = $reg !== ''
             ? $reg
             : (preg_match('/File\s*#?\s*([0-9]+)/i', (string)($c['file_details'] ?? ''), $m) ? $m[1] : '');
@@ -3343,7 +3343,7 @@ function ensure_statement_for_receipt(array $c, ?int $createdBy, int $receiptId 
     return $sid;
 }
 
-/** POST /receipts â€” save a new receipt voucher (auto-updates account statements). */
+/** POST /receipts — save a new receipt voucher (auto-updates account statements). */
 function create_receipt(array $body): void
 {
     ensure_receipts_table();
@@ -3386,7 +3386,7 @@ function create_receipt(array $body): void
     respond(['data' => receipt_payload($get->fetch() ?: ['id' => $id]), 'message' => 'Receipt saved'], 201);
 }
 
-/** PUT /receipts/{id} â€” update an existing receipt voucher. */
+/** PUT /receipts/{id} — update an existing receipt voucher. */
 function update_receipt(int $id, array $body): void
 {
     ensure_receipts_table();
@@ -3566,7 +3566,7 @@ function list_account_statements(array $filters): void
     respond(['data' => $rows, 'count' => count($rows)]);
 }
 
-/** GET /account-statements/{id} â€” single statement + ledger rows. */
+/** GET /account-statements/{id} — single statement + ledger rows. */
 function get_account_statement(int $id): void
 {
     ensure_account_statements_table();
@@ -3603,7 +3603,7 @@ function account_statement_columns(array $body): array
     ];
 }
 
-/** POST /account-statements â€” create a statement (empty ledger). */
+/** POST /account-statements — create a statement (empty ledger). */
 function create_account_statement(array $body): void
 {
     ensure_account_statements_table();
@@ -3687,7 +3687,7 @@ function delete_account_statement(int $id): void
     respond(['message' => 'Account statement deleted']);
 }
 
-/** POST /account-statements/{id}/rows â€” add a ledger row. */
+/** POST /account-statements/{id}/rows — add a ledger row. */
 function add_statement_row(int $sid, array $body): void
 {
     ensure_account_statements_table();
@@ -3961,7 +3961,7 @@ function send_test_email(array $body): void
     $to = trim((string)($body['to'] ?? ''));
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) fail('A valid "to" email is required');
 
-    $subject = trim((string)($body['subject'] ?? '')) ?: 'Expert Builders CRM â€” SMTP test email';
+    $subject = trim((string)($body['subject'] ?? '')) ?: 'Expert Builders CRM — SMTP test email';
     $html = trim((string)($body['html'] ?? ''))
         ?: '<p style="margin:0 0 10px 0;font-size:14px;color:#334155;">This is a test message from Expert Builders CRM.</p>'
             . '<p style="margin:0;font-size:13px;color:#64748b;">If you received this, the SMTP account '
@@ -4202,7 +4202,7 @@ function assign_submission(int $id, array $body): void
                 ? 'New support ticket assigned to you'
                 : 'New dealership application assigned to you';
             $detail = $isInquiry
-                ? "Ticket {$s['code']} â€” {$s['problem_category']} for {$who}{$place} (chassis {$s['chassis_number']}). Open Customer Inquiries to follow up."
+                ? "Ticket {$s['code']} — {$s['problem_category']} for {$who}{$place} (chassis {$s['chassis_number']}). Open Customer Inquiries to follow up."
                 : "Application {$s['code']} from {$who}{$place} ({$s['business_name']}). Open Dealership Page to review.";
             notify_staff($dealerId, null, $isInquiry ? 'inquiry_assigned' : 'application_assigned', $title, $detail);
         }
@@ -4264,10 +4264,8 @@ function ensure_properties_table(): void
             currency VARCHAR(8) DEFAULT "PKR",
             installment_available TINYINT(1) NOT NULL DEFAULT 0,
             advance_amount DECIMAL(20,2) DEFAULT 0,
-            advance_currency VARCHAR(8) DEFAULT "PKR",
             installment_count INT DEFAULT 0,
             monthly_installment DECIMAL(20,2) DEFAULT 0,
-            monthly_currency VARCHAR(8) DEFAULT "PKR",
             ready_for_possession TINYINT(1) NOT NULL DEFAULT 0,
             bedrooms VARCHAR(16) DEFAULT "",
             bathrooms VARCHAR(16) DEFAULT "",
@@ -4337,10 +4335,8 @@ function ensure_properties_table(): void
     $planCheck->execute();
     if ((int)$planCheck->fetchColumn() === 0) {
         db()->exec('ALTER TABLE properties ADD COLUMN advance_amount DECIMAL(20,2) DEFAULT 0 AFTER installment_available');
-        db()->exec('ALTER TABLE properties ADD COLUMN advance_currency VARCHAR(8) DEFAULT "PKR" AFTER advance_amount');
-        db()->exec('ALTER TABLE properties ADD COLUMN installment_count INT DEFAULT 0 AFTER advance_currency');
+        db()->exec('ALTER TABLE properties ADD COLUMN installment_count INT DEFAULT 0 AFTER advance_amount');
         db()->exec('ALTER TABLE properties ADD COLUMN monthly_installment DECIMAL(20,2) DEFAULT 0 AFTER installment_count');
-        db()->exec('ALTER TABLE properties ADD COLUMN monthly_currency VARCHAR(8) DEFAULT "PKR" AFTER monthly_installment');
     }
 
     $amenityCheck = db()->prepare(
@@ -4419,10 +4415,8 @@ function property_fields(array $body): array
         'currency' => $pick($body['currency'] ?? '', PROPERTY_CURRENCIES, 'PKR'),
         'installment_available' => $flag($body['installment_available'] ?? false),
         'advance_amount' => $money($body['advance_amount'] ?? 0),
-        'advance_currency' => $pick($body['advance_currency'] ?? 'PKR', ['PKR', 'USD', 'EUR', 'AED'], 'PKR'),
         'installment_count' => (int)(float)str_replace(',', '', trim((string)($body['installment_count'] ?? '0'))),
         'monthly_installment' => $money($body['monthly_installment'] ?? 0),
-        'monthly_currency' => $pick($body['monthly_currency'] ?? 'PKR', ['PKR', 'USD', 'EUR', 'AED'], 'PKR'),
         'ready_for_possession' => $flag($body['ready_for_possession'] ?? false),
         'bedrooms' => $t($body['bedrooms'] ?? ''),
         'bathrooms' => $t($body['bathrooms'] ?? ''),
@@ -4530,8 +4524,8 @@ function create_property(array $body): void
         'INSERT INTO properties
             (name, code, property_type, subtype, purpose, floor, block, registration_no,
              current_status, status,
-             sale_price, currency, installment_available, advance_amount, advance_currency,
-             installment_count, monthly_installment, monthly_currency, ready_for_possession,
+             sale_price, currency, installment_available, advance_amount, installment_count,
+             monthly_installment, ready_for_possession,
              bedrooms, bathrooms, amenities, video_url,
              contact_email, contact_mobile, contact_landline,
              original_price, discount, payment_plan, customer, agent, sale_date,
@@ -4552,9 +4546,9 @@ function create_property(array $body): void
         ':cstatus' => $f['current_status'], ':status' => $f['status'],
         ':sale' => $f['sale_price'],
         ':currency' => $f['currency'], ':installment' => $f['installment_available'],
-        ':adv_amt' => $f['advance_amount'], ':adv_cur' => $f['advance_currency'],
+        ':adv_amt' => $f['advance_amount'],
         ':inst_count' => $f['installment_count'],
-        ':monthly' => $f['monthly_installment'], ':monthly_cur' => $f['monthly_currency'],
+        ':monthly' => $f['monthly_installment'],
         ':possession' => $f['ready_for_possession'],
         ':bedrooms' => $f['bedrooms'], ':bathrooms' => $f['bathrooms'],
         ':amenities' => $f['amenities'], ':video_url' => $f['video_url'],
@@ -4642,7 +4636,7 @@ function ensure_property_exists(int $propertyId): void
     if ($exists->fetchColumn() === false) fail('Property not found', 404);
 }
 
-/** GET /properties/{id}/images â€” metadata only, never the image bytes. */
+/** GET /properties/{id}/images — metadata only, never the image bytes. */
 function list_property_images(int $propertyId): void
 {
     ensure_property_images_table();
@@ -4657,7 +4651,7 @@ function list_property_images(int $propertyId): void
     respond(['data' => $stmt->fetchAll(), 'count' => $stmt->rowCount()]);
 }
 
-/** POST /properties/{id}/images â€” store an uploaded image as a base64 data URI. */
+/** POST /properties/{id}/images — store an uploaded image as a base64 data URI. */
 function create_property_image(int $propertyId, array $body): void
 {
     ensure_property_images_table();
@@ -4698,7 +4692,7 @@ function create_property_image(int $propertyId, array $body): void
     respond(['data' => ['id' => (int)db()->lastInsertId()], 'message' => 'Image uploaded'], 201);
 }
 
-/** GET /properties/{id}/images/{imageId} â€” the raw image bytes. */
+/** GET /properties/{id}/images/{imageId} — the raw image bytes. */
 function get_property_image(int $propertyId, int $imageId): void
 {
     ensure_property_images_table();

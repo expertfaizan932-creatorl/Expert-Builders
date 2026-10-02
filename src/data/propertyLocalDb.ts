@@ -30,7 +30,7 @@ function write(key: string, value: unknown): boolean {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch {
-    // Quota exceeded â€” drop every stored image and retry once, images are the
+    // Quota exceeded … drop every stored image and retry once, images are the
     // only part that can realistically blow the ~5 MB localStorage budget.
     if (key === IMAGES_KEY) {
       try {
@@ -63,10 +63,8 @@ function blank(id: number): Property {
     currency: 'PKR',
     installment_available: 0,
     advance_amount: 0,
-    advance_currency: 'PKR',
     installment_count: 0,
     monthly_installment: 0,
-    monthly_currency: 'PKR',
     ready_for_possession: 0,
     bedrooms: '',
     bathrooms: '',
@@ -168,7 +166,7 @@ function loadImages(): ImageBucket {
   return read<ImageBucket>(IMAGES_KEY, {});
 }
 
-/** Shrink to â‰¤1280px JPEG so several images fit inside the localStorage quota. */
+/** Shrink to ≤1280px JPEG so several images fit inside the localStorage quota. */
 function shrink(data: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
