@@ -102,9 +102,19 @@ interface FeeRowProps {
   currency: string;
 }
 
-/** Fee option: title + hint with a switch, plus an amount box when the fee has one. */
+/** Fee option: title + hint with a switch, plus an amount box when the fee has one.
+ *  Typing an amount switches the fee on, clearing it switches the fee back off. */
 function FeeRow({ id, icon: Icon, label, on, onToggle, amount = '', onAmount, currency }: FeeRowProps) {
   const hasAmount = typeof onAmount === 'function';
+  const applied = on && amount !== '';
+
+  const handleAmount = (raw: string) => {
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, 12);
+    onAmount?.(digits);
+    if (digits && !on) onToggle(true);
+    if (!digits && on) onToggle(false);
+  };
+
   return (
     <div className="grid items-center gap-4 md:grid-cols-2 md:gap-8">
       <div className="flex items-center gap-4">
@@ -113,7 +123,9 @@ function FeeRow({ id, icon: Icon, label, on, onToggle, amount = '', onAmount, cu
         </div>
         <div className="min-w-0 flex-1">
           <h3 className={STEP_TITLE_CLS}>{label}</h3>
-          <p className={STEP_HINT_CLS}>Enable if applicable</p>
+          <p className={STEP_HINT_CLS}>
+            {applied ? `Enabled · ${currency} ${Number(amount).toLocaleString('en-US')}` : 'Enable if applicable'}
+          </p>
         </div>
         <Switch on={on} onChange={onToggle} label={label} />
       </div>
@@ -128,10 +140,11 @@ function FeeRow({ id, icon: Icon, label, on, onToggle, amount = '', onAmount, cu
             type="text"
             inputMode="numeric"
             value={amount}
-            disabled={!on}
-            onChange={(e) => onAmount?.(e.target.value.replace(/[^0-9]/g, ''))}
+            onChange={(e) => handleAmount(e.target.value)}
             placeholder={`Enter Amount in ${currency}`}
-            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue disabled:bg-slate-50 disabled:text-slate-400"
+            className={`w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue ${
+              on ? 'border-brand-blue/40' : 'border-slate-200'
+            }`}
           />
         </div>
       )}
