@@ -262,17 +262,6 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <TypeBadge value={p.property_type} />
                 <StatusBadge value={p.status} />
-                {Number(p.installment_available) === 1 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-                    Installment
-                    {Number(p.installment_months) > 0 ? ` · ${p.installment_months} mo` : ''}
-                  </span>
-                )}
-                {Number(p.ready_for_possession) === 1 && (
-                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
-                    Ready for possession
-                  </span>
-                )}
                 {p.city && (
                   <span className="text-xs text-slate-500">
                     {p.address ? `${p.address}, ` : ''}{p.city}
@@ -329,15 +318,6 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
               <Field label="Discount" value={fmtPrice(p.discount)} />
               <Field label="Final Price" value={fmtPrice(finalPrice)} />
               <Field label="Payment Plan" value={p.payment_plan} />
-              <Field label="Installment Available" value={Number(p.installment_available) === 1 ? 'Yes' : 'No'} />
-              {Number(p.installment_available) === 1 && (
-                <>
-                  <Field label="Down Payment" value={fmtPrice(p.down_payment)} />
-                  <Field label="No. of Months" value={p.installment_months || '-'} />
-                  <Field label="Monthly Installment" value={fmtPrice(p.monthly_installment)} />
-                </>
-              )}
-              <Field label="Ready for Possession" value={Number(p.ready_for_possession) === 1 ? 'Yes' : 'No'} />
             </Panel>
 
             <Panel title="Sales Information">
@@ -383,15 +363,6 @@ export default function PropertyDetailsPage({ id, onNotify }: PageProps) {
             <Field label="Discount" value={fmtPrice(p.discount)} />
             <Field label="Final Price" value={fmtPrice(finalPrice)} />
             <Field label="Payment Plan" value={p.payment_plan} />
-            <Field label="Installment Available" value={Number(p.installment_available) === 1 ? 'Yes' : 'No'} />
-            {Number(p.installment_available) === 1 && (
-              <>
-                <Field label="Down Payment" value={fmtPrice(p.down_payment)} />
-                <Field label="No. of Months" value={p.installment_months || '-'} />
-                <Field label="Monthly Installment" value={fmtPrice(p.monthly_installment)} />
-              </>
-            )}
-            <Field label="Ready for Possession" value={Number(p.ready_for_possession) === 1 ? 'Yes' : 'No'} />
           </Panel>
         )}
 

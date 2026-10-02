@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   HiOutlineBanknotes,
   HiOutlineChevronDown,
@@ -27,43 +27,33 @@ interface ToggleProps {
 
 function Toggle({ label, hint, icon: Icon, on, onChange }: ToggleProps) {
   return (
-    <label className="group flex cursor-pointer items-start gap-4">
+    <div className="flex items-start gap-4">
       <div className={STEP_ICON_CLS}>
         <Icon className="h-4 w-4" />
       </div>
-      <div className="flex flex-1 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 transition-colors hover:border-brand-blue/40 hover:bg-blue-50/50">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-1 items-center justify-between gap-4">
+        <div>
           <h3 className={STEP_TITLE_CLS}>{label}</h3>
           <p className={STEP_HINT_CLS}>{hint}</p>
         </div>
-
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) => onChange(e.target.checked)}
-          className="peer sr-only"
-        />
-        <span
-          aria-hidden="true"
-          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-2 transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-blue/40 peer-focus-visible:ring-offset-2 ${
-            on ? 'border-brand-blue bg-brand-blue' : 'border-slate-300 bg-slate-300'
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={label}
+          onClick={() => onChange(!on)}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            on ? 'bg-brand-blue' : 'bg-slate-300'
           }`}
         >
           <span
-            className={`ml-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
               on ? 'translate-x-5' : 'translate-x-0'
             }`}
           />
-        </span>
-        <span
-          className={`w-8 shrink-0 text-right text-[11px] font-bold uppercase tracking-wide ${
-            on ? 'text-brand-blue' : 'text-slate-400'
-          }`}
-        >
-          {on ? 'On' : 'Off'}
-        </span>
+        </button>
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -78,12 +68,6 @@ interface Props {
   onCurrency: (v: string) => void;
   installment: boolean;
   onInstallment: (v: boolean) => void;
-  downPayment: string;
-  onDownPayment: (v: string) => void;
-  installmentMonths: string;
-  onInstallmentMonths: (v: string) => void;
-  monthlyInstallment: string;
-  onMonthlyInstallment: (v: string) => void;
   possession: boolean;
   onPossession: (v: boolean) => void;
 }
@@ -100,17 +84,10 @@ export default function PropertyPriceArea({
   onCurrency,
   installment,
   onInstallment,
-  downPayment,
-  onDownPayment,
-  installmentMonths,
-  onInstallmentMonths,
-  monthlyInstallment,
-  onMonthlyInstallment,
   possession,
   onPossession,
 }: Props) {
   const [check, setCheck] = useState<string | null>(null);
-  const [monthlyEdited, setMonthlyEdited] = useState(false);
 
   const numeric = (v: string) => Number(v.replace(/,/g, ''));
 
@@ -128,35 +105,6 @@ export default function PropertyPriceArea({
     });
     setCheck(`Average estimation: ${pretty} ${currency} per ${unit}`);
   };
-
-  /* Monthly amount follows price / down payment / months until the user types their own. */
-  const monthlyFor = (total: string, down: string, months: string): string => {
-    const t = numeric(total);
-    const m = numeric(months);
-    if (!m || m <= 0 || t <= 0) return '';
-    return String(Math.round(Math.max(t - numeric(down), 0) / m));
-  };
-
-  useEffect(() => {
-    if (monthlyEdited) return;
-    const next = monthlyFor(price, downPayment, installmentMonths);
-    if (next !== monthlyInstallment) onMonthlyInstallment(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [price, downPayment, installmentMonths, monthlyEdited]);
-
-  const planPreview = (() => {
-    const total = numeric(price);
-    const down = numeric(downPayment);
-    const months = numeric(installmentMonths);
-    const monthly = numeric(monthlyInstallment);
-    if (!installment) return null;
-    if (!months || months <= 0) return 'Enter the number of months to build the payment plan.';
-    if (!total) return null;
-    const due = Math.max(total - down, 0);
-    return `${currency} ${down.toLocaleString('en-US')} down + ${months} monthly ${
-      monthly ? `installments of ${currency} ${monthly.toLocaleString('en-US')} ` : ''
-    }= ${currency} ${due.toLocaleString('en-US')}`;
-  })();
 
   return (
     <section className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-16">
@@ -275,84 +223,8 @@ export default function PropertyPriceArea({
           hint="Enable if listing is available on installments"
           icon={HiOutlineBanknotes}
           on={installment}
-          onChange={(v) => {
-            onInstallment(v);
-            if (!v) {
-              onDownPayment('');
-              onInstallmentMonths('');
-              onMonthlyInstallment('');
-              setMonthlyEdited(false);
-            }
-          }}
+          onChange={onInstallment}
         />
-
-        {installment && (
-          <div className="-mt-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4 sm:p-5">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label
-                  className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
-                  htmlFor="pa-down"
-                >
-                  Down Payment
-                </label>
-                <input
-                  id="pa-down"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={downPayment}
-                  onChange={(e) => onDownPayment(e.target.value)}
-                  placeholder={numeric(price) ? String(numeric(price)) : '0'}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue"
-                />
-              </div>
-              <div>
-                <label
-                  className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
-                  htmlFor="pa-months"
-                >
-                  No. of Months
-                </label>
-                <input
-                  id="pa-months"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  value={installmentMonths}
-                  onChange={(e) => onInstallmentMonths(e.target.value)}
-                  placeholder="12"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue"
-                />
-              </div>
-              <div>
-                <label
-                  className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
-                  htmlFor="pa-monthly"
-                >
-                  Monthly Installment
-                </label>
-                <input
-                  id="pa-monthly"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={monthlyInstallment}
-                  onChange={(e) => {
-                    setMonthlyEdited(true);
-                    onMonthlyInstallment(e.target.value);
-                  }}
-                  placeholder={monthlyFor(price, downPayment, installmentMonths) || '0'}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue"
-                />
-              </div>
-            </div>
-
-            {planPreview && (
-              <p className="mt-3 text-xs font-medium text-brand-blue">{planPreview}</p>
-            )}
-          </div>
-        )}
 
         {/* 4 — Possession */}
         <Toggle
