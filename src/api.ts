@@ -1,3 +1,15 @@
+import {
+  localCreateProperty,
+  localCreatePropertyImage,
+  localDeleteProperty,
+  localDeletePropertyImage,
+  localGetProperty,
+  localGetPropertyImage,
+  localListProperties,
+  localListPropertyImages,
+  localUpdateProperty,
+} from './data/propertyLocalDb';
+
 export interface ApiContact {
   id: number;
   name: string;
@@ -689,6 +701,14 @@ export function documentFileUrl(id: number, download = false): string {
 
 let workingBase: string | null = null;
 
+/** Carries the HTTP status so callers can tell "endpoint not deployed" from a real API error. */
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const bases = Array.from(
     new Set([workingBase, API_BASE].concat(detectApiBases()).filter(Boolean) as string[])
@@ -729,7 +749,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       // so surface that error instead of trying other bases.
       if (payload !== null) {
         const msg = (payload as { error?: string })?.error ?? `HTTP ${res.status}`;
-        throw new Error(msg);
+        throw new ApiError(msg, res.status);
       }
 
       lastErr = new Error(`Invalid JSON from ${base}${path} (HTTP ${res.status})`);
@@ -748,6 +768,39 @@ function toQuery(params: ListParams): string {
   });
   const s = q.toString();
   return s ? `?${s}` : '';
+}
+
+/**
+ * The property module talks to the API first. If the API is unreachable or has
+ * no `properties` resource (older api/index.php on the proxied host), it falls
+ * back to a browser-local store so the module still works in dev. Real API
+ * errors (validation, 4xx/5xx) are never swallowed — only reachability failures.
+ */
+let propertiesOffline = false;
+
+function isUnreachable(err: unknown): boolean {
+  // 404 on an API that answers JSON means the resource is not deployed there.
+  if ((err as { status?: number })?.status === 404) return true;
+  const msg = (err as Error)?.message ?? '';
+  return /failed to fetch|networkerror|non-json response|invalid json from|unable to reach the crm api|load failed/i.test(
+    msg,
+  );
+}
+
+function withFallback<T>(net: () => Promise<T>, local: () => Promise<T>): Promise<T> {
+  if (propertiesOffline) return local();
+  return net().then(
+    (res) => {
+      propertiesOffline = false;
+      return res;
+    },
+    (err) => (isUnreachable(err) ? ((propertiesOffline = true), local()) : Promise.reject(err)),
+  );
+}
+
+/** True when the property module is running on the browser-local fallback store. */
+export function isPropertyModuleOffline(): boolean {
+  return propertiesOffline;
 }
 
 export const api = {
@@ -800,42 +853,70 @@ export const api = {
   /* ------------------- PROPERTIES ------------------- */
 
   listProperties: (filters: PropertyFilters = {}) =>
-    request<{ data: Property[]; count: number }>(`/properties${toQuery(filters)}`),
+    withFallback(
+      () => request<{ data: Property[]; count: number }>(`/properties${toQuery(filters)}`),
+      () => localListProperties(filters),
+    ),
 
-  getProperty: (id: number) => request<{ data: Property }>(`/properties/${id}`),
+  getProperty: (id: number) =>
+    withFallback(
+      () => request<{ data: Property }>(`/properties/${id}`),
+      () => localGetProperty(id),
+    ),
 
   createProperty: (input: Partial<Property>) =>
-    request<{ data: Property; message: string }>('/properties', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+    withFallback(
+      () =>
+        request<{ data: Property; message: string }>('/properties', {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      () => localCreateProperty(input as Record<string, unknown>),
+    ),
 
   updateProperty: (id: number, input: Partial<Property>) =>
-    request<{ data: Property; message: string }>(`/properties/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(input),
-    }),
+    withFallback(
+      () =>
+        request<{ data: Property; message: string }>(`/properties/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      () => localUpdateProperty(id, input as Record<string, unknown>),
+    ),
 
   deleteProperty: (id: number) =>
-    request<{ message: string }>(`/properties/${id}`, { method: 'DELETE' }),
+    withFallback(
+      () => request<{ message: string }>(`/properties/${id}`, { method: 'DELETE' }),
+      () => localDeleteProperty(id),
+    ),
 
   listPropertyImages: (id: number) =>
-    request<{ data: PropertyImage[]; count: number }>(`/properties/${id}/images`),
+    withFallback(
+      () => request<{ data: PropertyImage[]; count: number }>(`/properties/${id}/images`),
+      () => localListPropertyImages(id),
+    ),
 
   getPropertyImage: (id: number, imageId: number) =>
-    request<{ data: string; mime: string; name: string }>(`/properties/${id}/images/${imageId}`),
+    withFallback(
+      () => request<{ data: string; mime: string; name: string }>(`/properties/${id}/images/${imageId}`),
+      () => localGetPropertyImage(id, imageId),
+    ),
 
-  createPropertyImage: (
-    id: number,
-    input: { data: string; name: string },
-  ) =>
-    request<{ data: { id: number }; message: string }>(`/properties/${id}/images`, {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  createPropertyImage: (id: number, input: { data: string; name: string }) =>
+    withFallback(
+      () =>
+        request<{ data: { id: number }; message: string }>(`/properties/${id}/images`, {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      () => localCreatePropertyImage(id, input),
+    ),
 
   deletePropertyImage: (id: number, imageId: number) =>
-    request<{ message: string }>(`/properties/${id}/images/${imageId}`, { method: 'DELETE' }),
+    withFallback(
+      () => request<{ message: string }>(`/properties/${id}/images/${imageId}`, { method: 'DELETE' }),
+      () => localDeletePropertyImage(id, imageId),
+    ),
 
   listTasks: (contactId: number) =>
     request<{ data: TaskItem[]; count: number }>(`/contacts/${contactId}/tasks`),

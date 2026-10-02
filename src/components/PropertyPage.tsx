@@ -15,7 +15,7 @@ import {
   FaSliders,
   FaXmark,
 } from 'react-icons/fa6';
-import { api, type Property } from '../api';
+import { api, isPropertyModuleOffline, type Property } from '../api';
 import { navigate } from '../router';
 import ConfirmDialog from './ConfirmDialog';
 import PropertyFormModal from './property/PropertyFormModal';
@@ -72,6 +72,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
   const [filters, setFilters] = useState<PropertyFilterValues>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [page, setPage] = useState(1);
@@ -92,6 +93,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
       onNotify((err as Error).message || 'Could not load properties');
     } finally {
       setLoading(false);
+      setOffline(isPropertyModuleOffline());
     }
   }, [onNotify]);
 
@@ -323,6 +325,17 @@ export default function PropertyPage({ onNotify }: PageProps) {
       )}
 
       {/* ---------- Filter chips ---------- */}
+      {offline && (
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-800 md:px-6">
+          <span className="font-bold">Offline mode</span>
+          <span className="font-normal">
+            API par <code className="font-mono">properties</code> resource available nahi hai, is liye
+            data browser ke local storage me save ho raha hai. Live DB me save ke liye updated
+            <code className="font-mono"> api/index.php </code> deploy karna hoga.
+          </span>
+        </div>
+      )}
+
       {hasActiveFilters(filters) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2.5 md:px-6">
           {Object.entries(filters)
