@@ -249,7 +249,7 @@ export default function PropertyPriceArea({
         />
 
         {installment && (
-          <div className="space-y-6 rounded-2xl border border-brand-blue/20 bg-blue-50/40 p-4 sm:p-6">
+          <>
             {/* Advance Amount */}
             <div className="flex items-start gap-4">
               <div className={STEP_ICON_CLS}>
@@ -316,7 +316,7 @@ export default function PropertyPriceArea({
                 />
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* 4 — Possession */}
