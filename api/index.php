@@ -4263,6 +4263,11 @@ function ensure_properties_table(): void
             sale_price DECIMAL(20,2) DEFAULT 0,
             currency VARCHAR(8) DEFAULT "PKR",
             installment_available TINYINT(1) NOT NULL DEFAULT 0,
+            advance_amount DECIMAL(20,2) DEFAULT 0,
+            advance_currency VARCHAR(8) DEFAULT "PKR",
+            installment_count INT DEFAULT 0,
+            monthly_installment DECIMAL(20,2) DEFAULT 0,
+            monthly_currency VARCHAR(8) DEFAULT "PKR",
             ready_for_possession TINYINT(1) NOT NULL DEFAULT 0,
             bedrooms VARCHAR(16) DEFAULT "",
             bathrooms VARCHAR(16) DEFAULT "",
@@ -4321,6 +4326,21 @@ function ensure_properties_table(): void
         db()->exec('ALTER TABLE properties ADD COLUMN currency VARCHAR(8) DEFAULT "PKR" AFTER sale_price');
         db()->exec('ALTER TABLE properties ADD COLUMN installment_available TINYINT(1) NOT NULL DEFAULT 0 AFTER currency');
         db()->exec('ALTER TABLE properties ADD COLUMN ready_for_possession TINYINT(1) NOT NULL DEFAULT 0 AFTER installment_available');
+    }
+
+    $planCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'advance_amount'"
+    );
+    $planCheck->execute();
+    if ((int)$planCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN advance_amount DECIMAL(20,2) DEFAULT 0 AFTER installment_available');
+        db()->exec('ALTER TABLE properties ADD COLUMN advance_currency VARCHAR(8) DEFAULT "PKR" AFTER advance_amount');
+        db()->exec('ALTER TABLE properties ADD COLUMN installment_count INT DEFAULT 0 AFTER advance_currency');
+        db()->exec('ALTER TABLE properties ADD COLUMN monthly_installment DECIMAL(20,2) DEFAULT 0 AFTER installment_count');
+        db()->exec('ALTER TABLE properties ADD COLUMN monthly_currency VARCHAR(8) DEFAULT "PKR" AFTER monthly_installment');
     }
 
     $amenityCheck = db()->prepare(
@@ -4398,6 +4418,11 @@ function property_fields(array $body): array
         'sale_price' => $money($body['sale_price'] ?? 0),
         'currency' => $pick($body['currency'] ?? '', PROPERTY_CURRENCIES, 'PKR'),
         'installment_available' => $flag($body['installment_available'] ?? false),
+        'advance_amount' => $money($body['advance_amount'] ?? 0),
+        'advance_currency' => $pick($body['advance_currency'] ?? 'PKR', ['PKR', 'USD', 'EUR', 'AED'], 'PKR'),
+        'installment_count' => (int)(float)str_replace(',', '', trim((string)($body['installment_count'] ?? '0'))),
+        'monthly_installment' => $money($body['monthly_installment'] ?? 0),
+        'monthly_currency' => $pick($body['monthly_currency'] ?? 'PKR', ['PKR', 'USD', 'EUR', 'AED'], 'PKR'),
         'ready_for_possession' => $flag($body['ready_for_possession'] ?? false),
         'bedrooms' => $t($body['bedrooms'] ?? ''),
         'bathrooms' => $t($body['bathrooms'] ?? ''),
@@ -4434,8 +4459,11 @@ function property_payload(array $row): array
     foreach (['sale_price', 'original_price', 'discount'] as $f) {
         if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
-    foreach (['installment_available', 'ready_for_possession'] as $f) {
+    foreach (['installment_available', 'ready_for_possession', 'installment_count'] as $f) {
         if (isset($row[$f])) $row[$f] = (int)$row[$f];
+    }
+    foreach (['advance_amount', 'monthly_installment'] as $f) {
+        if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
     foreach (['latitude', 'longitude'] as $f) {
         if (isset($row[$f])) $row[$f] = $row[$f] === null ? null : (float)$row[$f];
@@ -4502,14 +4530,15 @@ function create_property(array $body): void
         'INSERT INTO properties
             (name, code, property_type, subtype, purpose, floor, block, registration_no,
              current_status, status,
-             sale_price, currency, installment_available, ready_for_possession,
+             sale_price, currency, installment_available, advance_amount, advance_currency,
+             installment_count, monthly_installment, monthly_currency, ready_for_possession,
              bedrooms, bathrooms, amenities, video_url,
              contact_email, contact_mobile, contact_landline,
              original_price, discount, payment_plan, customer, agent, sale_date,
              booking_date, transfer_status, transfer_date, transfer_from, transfer_to,
              address, city, area, size, unit, latitude, longitude, description)
          VALUES (:name, :code, :ptype, :subtype, :purpose, :floor, :block, :reg, :cstatus, :status,
-                 :sale, :currency, :installment, :possession,
+                 :sale, :currency, :installment, :adv_amt, :adv_cur, :inst_count, :monthly, :monthly_cur, :possession,
                  :bedrooms, :bathrooms, :amenities, :video_url,
                  :c_email, :c_mobile, :c_landline,
                  :orig, :disc, :plan, :cust, :agent, :sale_date,
@@ -4523,6 +4552,9 @@ function create_property(array $body): void
         ':cstatus' => $f['current_status'], ':status' => $f['status'],
         ':sale' => $f['sale_price'],
         ':currency' => $f['currency'], ':installment' => $f['installment_available'],
+        ':adv_amt' => $f['advance_amount'], ':adv_cur' => $f['advance_currency'],
+        ':inst_count' => $f['installment_count'],
+        ':monthly' => $f['monthly_installment'], ':monthly_cur' => $f['monthly_currency'],
         ':possession' => $f['ready_for_possession'],
         ':bedrooms' => $f['bedrooms'], ':bathrooms' => $f['bathrooms'],
         ':amenities' => $f['amenities'], ':video_url' => $f['video_url'],

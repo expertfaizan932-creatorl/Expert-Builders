@@ -28,6 +28,11 @@ interface FormState {
   price: string;
   currency: string;
   installment: boolean;
+  advanceAmount: string;
+  advanceCurrency: string;
+  installmentCount: string;
+  monthlyInstallment: string;
+  monthlyCurrency: string;
   possession: boolean;
   bedrooms: string;
   bathrooms: string;
@@ -52,8 +57,13 @@ const EMPTY: FormState = {
   unit: 'Sq. Ft.',
   price: '',
   currency: 'PKR',
-  installment: false,
-  possession: false,
+installment: false,
+advanceAmount: '',
+advanceCurrency: 'PKR',
+installmentCount: '',
+monthlyInstallment: '',
+monthlyCurrency: 'PKR',
+possession: false,
   bedrooms: '',
   bathrooms: '',
   amenities: [],
@@ -121,6 +131,11 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         sale_price: Number(form.price.replace(/,/g, '')) || 0,
         currency: form.currency,
         installment_available: form.installment ? 1 : 0,
+        advance_amount: Number(form.advanceAmount.replace(/,/g, '')) || 0,
+        advance_currency: form.advanceCurrency,
+        installment_count: Number(form.installmentCount) || 0,
+        monthly_installment: Number(form.monthlyInstallment.replace(/,/g, '')) || 0,
+        monthly_currency: form.monthlyCurrency,
         ready_for_possession: form.possession ? 1 : 0,
         bedrooms: form.bedrooms,
         bathrooms: form.bathrooms,
@@ -221,6 +236,16 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             onCurrency={(v) => set('currency', v)}
             installment={form.installment}
             onInstallment={(v) => set('installment', v)}
+            advanceAmount={form.advanceAmount}
+            onAdvanceAmount={(v) => set('advanceAmount', v)}
+            advanceCurrency={form.advanceCurrency}
+            onAdvanceCurrency={(v) => set('advanceCurrency', v)}
+            installmentCount={form.installmentCount}
+            onInstallmentCount={(v) => set('installmentCount', v)}
+            monthlyInstallment={form.monthlyInstallment}
+            onMonthlyInstallment={(v) => set('monthlyInstallment', v)}
+            monthlyCurrency={form.monthlyCurrency}
+            onMonthlyCurrency={(v) => set('monthlyCurrency', v)}
             possession={form.possession}
             onPossession={(v) => set('possession', v)}
           />

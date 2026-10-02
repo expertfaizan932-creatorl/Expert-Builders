@@ -542,6 +542,11 @@ export interface Property {
   sale_price: number;
   currency: string;
   installment_available: number;
+  advance_amount: number;
+  advance_currency: string;
+  installment_count: number;
+  monthly_installment: number;
+  monthly_currency: string;
   ready_for_possession: number;
   bedrooms: string;
   bathrooms: string;
