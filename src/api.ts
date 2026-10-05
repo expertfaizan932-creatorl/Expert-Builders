@@ -668,6 +668,12 @@ export interface CreateContactInput {
   avatar_data?: string | null;
   tags?: string[];
   custom_fields?: Record<string, unknown>;
+  /**
+   * Staff id of whoever is creating the record. The server stamps this as the
+   * contact's owner so non-admins can see what they add (admins are ignored so
+   * their leads still land in the unassigned pool).
+   */
+  created_by?: number | null;
 }
 
 export interface UpdateContactInput {

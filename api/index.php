@@ -252,6 +252,33 @@ function merge_custom_fields(?string $existingRaw, ?string $incomingRaw): ?strin
     return encode_json_field($result);
 }
 
+/**
+ * Work out which staff member should OWN a freshly created contact.
+ *
+ * A contact is only visible to a non-admin through `restrict_to`, which matches
+ * `assigned_to = me OR followed-by-me`. Without an owner a lead created by a
+ * Dealer/Follower was therefore invisible to its own creator (it only sat in the
+ * admin's "Unassigned" pool). Passing the acting staff id lets us stamp
+ * `assigned_to` at creation time so the creator sees it everywhere while the
+ * admin still sees the whole CRM.
+ *
+ * Admins deliberately get NULL so leads they add keep landing in the
+ * "Unassigned Leads" pool that the admin then hands out to dealers.
+ */
+function resolve_contact_owner(array $body): ?int
+{
+    $actorId = isset($body['created_by']) ? to_int((string)$body['created_by']) : 0;
+    if ($actorId <= 0) return null;
+
+    $stmt = db()->prepare('SELECT id, user_type FROM staff_users WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $actorId]);
+    $actor = $stmt->fetch();
+    if (!$actor) return null;
+    if (($actor['user_type'] ?? '') === 'Admin') return null;
+
+    return (int)$actor['id'];
+}
+
 /** Create a contact (accepts first_name/last_name or a combined name). */
 function create_contact(array $body): void
 {
@@ -295,6 +322,10 @@ function create_contact(array $body): void
         || in_array('warm lead', $tagInput, true)
         || in_array('hot lead', $tagInput, true)
         || in_array('cold lead', $tagInput, true);
+
+    // Stamp the creator as owner so the person who added the lead can see it in
+    // their own contacts/leads/dashboard. Null for admins & public form posts.
+    $ownerId = resolve_contact_owner($body);
 
     $pdo = db();
     $pdo->beginTransaction();
@@ -358,6 +389,13 @@ function create_contact(array $body): void
             }
             $updates[] = 'last_activity_at = NOW()';
             $updates[] = 'deleted_at = NULL';
+            // A non-admin re-submitting a form for a lead that nobody owns yet
+            // should end up owning it, otherwise the update is invisible to them.
+            // Never steal a lead that is already assigned to someone else.
+            if ($ownerId !== null) {
+                $updates[] = 'assigned_to = COALESCE(assigned_to, :claim_owner)';
+                $params[':claim_owner'] = $ownerId;
+            }
             if ($updates) {
                 $pdo->prepare('UPDATE contacts SET ' . implode(', ', $updates) . ' WHERE id = :id')
                     ->execute($params);
@@ -379,14 +417,21 @@ function create_contact(array $body): void
                     ->execute([':c' => $existingId, ':t' => $repeatTagId]);
             }
 
+            // Same mutual exclusion as update_contact(): once the claiming user
+            // owns the lead they can no longer also be a follower of it.
+            if ($ownerId !== null) {
+                $pdo->prepare('DELETE FROM contact_followers WHERE contact_id = :c AND staff_id = :s')
+                    ->execute([':c' => $existingId, ':s' => $ownerId]);
+            }
+
             $pdo->commit();
             respond(['data' => ['id' => $existingId], 'message' => 'Contact already exists; updated'], 200);
         }
 
         $stmt = $pdo->prepare(
             'INSERT INTO contacts (first_name, last_name, phone, email, business_name,
-                                   contact_type, is_lead, avatar_color, avatar_data, custom_fields)
-             VALUES (:fn, :ln, :phone, :email, :biz, :type, :lead, :color, :avatar, :custom)'
+                                   contact_type, is_lead, avatar_color, avatar_data, custom_fields, assigned_to)
+             VALUES (:fn, :ln, :phone, :email, :biz, :type, :lead, :color, :avatar, :custom, :assigned_to)'
         );
         $stmt->execute([
             ':fn' => $firstName,
@@ -399,6 +444,7 @@ function create_contact(array $body): void
             ':color' => $avatarColor,
             ':avatar' => $avatarData,
             ':custom' => $customFields,
+            ':assigned_to' => $ownerId,
         ]);
 
         $contactId = (int)$pdo->lastInsertId();

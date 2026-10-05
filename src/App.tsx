@@ -1011,6 +1011,7 @@ const handleAddSmartList = async (list: Omit<SmartList, 'id' | 'members'>) => {
         avatar_data: data.image ?? null,
         tags: [data.tag.toLowerCase()],
         custom_fields: contactPropertiesPayload(data.customFields),
+        created_by: user?.id ?? null,
       });
       await reload();
       showToast(`Contact "${data.name}" added successfully`);
@@ -1125,6 +1126,7 @@ const handleAddSmartList = async (list: Omit<SmartList, 'id' | 'members'>) => {
             contact_type: 'Lead',
             avatar_color: 'bg-slate-200 text-slate-700',
             tags: ['lead', 'imported'],
+            created_by: user?.id ?? null,
             custom_fields: {
               import_data: cleanRow(row),
               import_sheet: sheet.name,
