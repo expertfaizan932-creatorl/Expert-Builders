@@ -16,7 +16,7 @@ export interface PendingImage {
 }
 
 /** Preset sample photos offered by the Image Bank picker. */
-const IMAGE_BANK = [
+export const IMAGE_BANK = [
   { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80', label: 'Exterior House' },
   { url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80', label: 'Living Room' },
   { url: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=600&q=80', label: 'Modern Kitchen' },

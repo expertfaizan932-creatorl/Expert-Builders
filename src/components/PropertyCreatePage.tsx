@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FaArrowLeft } from 'react-icons/fa6';
 import { api, type Property } from '../api';
+import { forgetPropertyImages, isRemoteImage, toDataUri } from '../data/propertyImages';
 import { navigate } from '../router';
 import PropertyLocationPurpose, {
   PURPOSE_CATEGORIES,
@@ -33,6 +34,8 @@ interface FormState {
   installmentCount: string;
   monthlyInstallment: string;
   balloonPayment: boolean;
+  balloonAmount: string;
+  balloonPaymentCount: string;
   ballotingFee: boolean;
   ballotingAmount: string;
   possessionFee: boolean;
@@ -43,6 +46,7 @@ interface FormState {
   bedrooms: string;
   bathrooms: string;
   amenities: string[];
+  amenityDetails: Record<string, string>;
   title: string;
   description: string;
   images: PendingImage[];
@@ -69,7 +73,9 @@ advanceAmount: '',
 installmentCount: '',
 monthlyInstallment: '',
 balloonPayment: false,
-ballotingFee: false,
+  balloonAmount: '',
+  balloonPaymentCount: '',
+  ballotingFee: false,
 ballotingAmount: '',
 possessionFee: false,
 possessionAmount: '',
@@ -79,6 +85,7 @@ possession: false,
   bedrooms: '',
   bathrooms: '',
   amenities: [],
+  amenityDetails: {},
   title: '',
   description: '',
   images: [],
@@ -97,11 +104,13 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
   const [saving, setSaving] = useState(false);
   const [titleError, setTitleError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [balloonAmountError, setBalloonAmountError] = useState('');
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
     if (k === 'title') setTitleError('');
     if (k === 'email') setEmailError('');
+    if (k === 'balloonAmount') setBalloonAmountError('');
   };
 
   const changeCategory = (key: PurposeCategory) => {
@@ -126,6 +135,10 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
       setEmailError('Enter a valid email address.');
       return;
     }
+    if (form.balloonPayment && !form.balloonAmount.trim()) {
+      setBalloonAmountError('Please enter balloon payment amount');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -147,8 +160,10 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         advance_amount: Number(form.advanceAmount.replace(/,/g, '')) || 0,
         installment_count: Number(form.installmentCount) || 0,
         monthly_installment: Number(form.monthlyInstallment.replace(/,/g, '')) || 0,
-        balloon_payment_available: form.balloonPayment ? 1 : 0,
-        balloting_fee_available: form.ballotingFee ? 1 : 0,
+balloon_payment_available: form.balloonPayment ? 1 : 0,
+      balloon_amount: Number(form.balloonAmount.replace(/,/g, '')) || 0,
+      balloon_payment_count: Number(form.balloonPaymentCount) || 0,
+      balloting_fee_available: form.ballotingFee ? 1 : 0,
         balloting_fee: Number(form.ballotingAmount.replace(/,/g, '')) || 0,
         possession_fee_available: form.possessionFee ? 1 : 0,
         possession_fee: Number(form.possessionAmount.replace(/,/g, '')) || 0,
@@ -157,7 +172,10 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         ready_for_possession: form.possession ? 1 : 0,
         bedrooms: form.bedrooms,
         bathrooms: form.bathrooms,
-        amenities: form.amenities.join(', '),
+        amenities: [
+          ...form.amenities,
+          ...Object.entries(form.amenityDetails).map(([k, v]) => `${k}: ${v}`),
+        ].join(', '),
         description: form.description.trim(),
         video_url: form.videoUrl,
         contact_email: email,
@@ -168,16 +186,19 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
         contact_landline: form.landline.trim(),
       } as Partial<Property>);
 
-      // Images need the new property id, so they go up right after creation.
-      const propertyId = res.data?.id;
+// Images need the new property id, so they go up right after creation.
+    const propertyId = res.data?.id;
       if (propertyId) {
         for (const image of form.images) {
           try {
-            await api.createPropertyImage(propertyId, { data: image.data, name: image.name });
+            /* Image Bank picks hold a remote URL, but the API only stores data URIs. */
+            const data = isRemoteImage(image.data) ? await toDataUri(image.data) : image.data;
+            await api.createPropertyImage(propertyId, { data, name: image.name });
           } catch {
             /* keep going so one bad image cannot fail the whole save */
           }
         }
+        forgetPropertyImages(propertyId);
       }
 
       onNotify(`Property "${res.data?.name ?? title}" created`);
@@ -263,7 +284,19 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             monthlyInstallment={form.monthlyInstallment}
             onMonthlyInstallment={(v) => set('monthlyInstallment', v)}
             balloonPayment={form.balloonPayment}
-            onBalloonPayment={(v) => set('balloonPayment', v)}
+            onBalloonPayment={(v) => {
+              set('balloonPayment', v);
+              if (!v) {
+                set('balloonAmount', '');
+                set('balloonPaymentCount', '');
+                setBalloonAmountError('');
+              }
+            }}
+            balloonAmount={form.balloonAmount}
+            onBalloonAmount={(v) => set('balloonAmount', v)}
+            balloonPaymentCount={form.balloonPaymentCount}
+            onBalloonPaymentCount={(v) => set('balloonPaymentCount', v)}
+            balloonAmountError={balloonAmountError}
             ballotingFee={form.ballotingFee}
             onBallotingFee={(v) => set('ballotingFee', v)}
             ballotingAmount={form.ballotingAmount}
@@ -289,6 +322,8 @@ export default function PropertyCreatePage({ onNotify }: PageProps) {
             onBathrooms={(v) => set('bathrooms', v)}
             amenities={form.amenities}
             onAmenities={(v) => set('amenities', v)}
+            amenityDetails={form.amenityDetails}
+            onAmenityDetails={(v) => set('amenityDetails', v)}
           />
 
           <div className="my-8 h-px bg-slate-200" />

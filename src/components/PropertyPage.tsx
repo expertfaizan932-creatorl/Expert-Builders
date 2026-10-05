@@ -25,12 +25,17 @@ import PropertyFilterPanel, {
   type PropertyFilterValues,
 } from './property/PropertyFilterPanel';
 import {
-  CurrentStatusBadge,
   PROP,
-  PropertyAvatar,
+  CurrentStatusBadge,
   StatusBadge,
   TypeBadge,
 } from './property/PropertyBadges';
+import PropertyThumb from './property/PropertyThumb';
+import {
+  collectValues,
+  DEFAULT_CURRENT_STATUSES,
+  mergeOptions,
+} from '../data/propertyOptions';
 
 interface PageProps {
   onNotify: (msg: string) => void;
@@ -109,14 +114,18 @@ export default function PropertyPage({ onNotify }: PageProps) {
   }, [moreOpen]);
 
   // Derived filter options come from the full dataset.
-  const { floors, blocks } = useMemo(() => {
+  const { floors, blocks, currentStatuses } = useMemo(() => {
     const f = new Set<string>();
     const b = new Set<string>();
     rows.forEach((r) => {
       if (r.floor) f.add(r.floor);
       if (r.block) b.add(r.block);
     });
-    return { floors: [...f].sort(), blocks: [...b].sort() };
+    return {
+      floors: [...f].sort(),
+      blocks: [...b].sort(),
+      currentStatuses: mergeOptions(DEFAULT_CURRENT_STATUSES, collectValues(rows, 'current_status')),
+    };
   }, [rows]);
 
   const visible = useMemo(() => {
@@ -435,7 +444,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
                       {/* Property */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <PropertyAvatar name={p.name} />
+                          <PropertyThumb id={p.id} name={p.name} />
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-slate-800">
                               {p.name}
@@ -454,7 +463,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
                       </td>
 
                       <td className="px-4 py-3">
-                        <CurrentStatusBadge value={p.current_status} />
+                        <CurrentStatusBadge value={p.current_status || 'UnSold'} />
                       </td>
 
                       <td className="px-4 py-3">
@@ -549,7 +558,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <PropertyAvatar name={p.name} />
+                <PropertyThumb id={p.id} name={p.name} />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-slate-800">{p.name}</div>
                   <div className="truncate text-xs text-slate-500">{subLine(p)}</div>
@@ -570,7 +579,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <TypeBadge value={p.property_type} />
-              <CurrentStatusBadge value={p.current_status} />
+              <CurrentStatusBadge value={p.current_status || 'UnSold'} />
               <StatusBadge value={p.status} />
             </div>
             <div className="mt-3 flex items-center justify-between text-xs">
@@ -597,6 +606,7 @@ export default function PropertyPage({ onNotify }: PageProps) {
         values={filters}
         floors={floors}
         blocks={blocks}
+        currentStatuses={currentStatuses}
         onChange={setFilters}
         onApply={() => setFilterOpen(false)}
         onClear={() => setFilters(EMPTY_FILTERS)}

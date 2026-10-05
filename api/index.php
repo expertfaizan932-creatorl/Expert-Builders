@@ -4236,7 +4236,12 @@ function delete_submission(int $id): void
  * ================================================================ */
 
 const PROPERTY_TYPES = ['Residential', 'Commercial', 'Industrial', 'Plot'];
-const PROPERTY_SALE_STATUSES = ['Sold', 'UnSold'];
+/* Sale statuses the UI offers. The column stays VARCHAR so a custom status set
+   from the dropdown is stored as-is instead of being reset to UnSold. */
+const PROPERTY_SALE_STATUSES = ['UnSold', 'Sold'];
+const PROPERTY_BUYBACK_STATUSES = [
+    'Not Eligible', 'Eligible', 'Requested', 'Approved', 'Rejected',
+];
 const PROPERTY_STATUSES = ['Active', 'Inactive'];
 const PROPERTY_PURPOSES = ['Sell', 'Rent'];
 const PROPERTY_CURRENCIES = ['PKR', 'USD', 'EUR'];
@@ -4267,6 +4272,8 @@ function ensure_properties_table(): void
             installment_count INT DEFAULT 0,
             monthly_installment DECIMAL(20,2) DEFAULT 0,
             balloon_payment_available TINYINT(1) NOT NULL DEFAULT 0,
+            balloon_amount DECIMAL(20,2) DEFAULT 0,
+            balloon_payment_count INT DEFAULT 0,
             balloting_fee_available TINYINT(1) NOT NULL DEFAULT 0,
             balloting_fee DECIMAL(20,2) DEFAULT 0,
             possession_fee_available TINYINT(1) NOT NULL DEFAULT 0,
@@ -4276,7 +4283,7 @@ function ensure_properties_table(): void
             ready_for_possession TINYINT(1) NOT NULL DEFAULT 0,
             bedrooms VARCHAR(16) DEFAULT "",
             bathrooms VARCHAR(16) DEFAULT "",
-            amenities VARCHAR(500) DEFAULT "",
+            amenities TEXT,
             video_url VARCHAR(500) DEFAULT "",
             contact_email VARCHAR(160) DEFAULT "",
             contact_mobile VARCHAR(255) DEFAULT "",
@@ -4292,6 +4299,10 @@ function ensure_properties_table(): void
             transfer_date DATE NULL,
             transfer_from VARCHAR(255) DEFAULT "",
             transfer_to VARCHAR(255) DEFAULT "",
+            buyback_status VARCHAR(32) DEFAULT "Not Eligible",
+            buyback_price DECIMAL(20,2) DEFAULT 0,
+            buyback_requested_on DATE NULL,
+            buyback_approved_on DATE NULL,
             address VARCHAR(255) DEFAULT "",
             city VARCHAR(120) DEFAULT "",
             area VARCHAR(120) DEFAULT "",
@@ -4363,6 +4374,18 @@ function ensure_properties_table(): void
         db()->exec('ALTER TABLE properties ADD COLUMN development_fee DECIMAL(20,2) DEFAULT 0 AFTER development_fee_available');
     }
 
+    $balloonAmountCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'balloon_amount'"
+    );
+    $balloonAmountCheck->execute();
+    if ((int)$balloonAmountCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN balloon_amount DECIMAL(20,2) DEFAULT 0 AFTER balloon_payment_available');
+        db()->exec('ALTER TABLE properties ADD COLUMN balloon_payment_count INT DEFAULT 0 AFTER balloon_amount');
+    }
+
     $amenityCheck = db()->prepare(
         "SELECT COUNT(*) FROM information_schema.COLUMNS
           WHERE TABLE_SCHEMA = DATABASE()
@@ -4373,7 +4396,35 @@ function ensure_properties_table(): void
     if ((int)$amenityCheck->fetchColumn() === 0) {
         db()->exec('ALTER TABLE properties ADD COLUMN bedrooms VARCHAR(16) DEFAULT "" AFTER ready_for_possession');
         db()->exec('ALTER TABLE properties ADD COLUMN bathrooms VARCHAR(16) DEFAULT "" AFTER bedrooms');
-        db()->exec('ALTER TABLE properties ADD COLUMN amenities VARCHAR(500) DEFAULT "" AFTER bathrooms');
+        db()->exec('ALTER TABLE properties ADD COLUMN amenities TEXT AFTER bathrooms');
+    }
+
+    $amenitiesTextCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'amenities'
+            AND DATA_TYPE    = 'text'"
+    );
+    $amenitiesTextCheck->execute();
+    if ((int)$amenitiesTextCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties MODIFY COLUMN amenities TEXT');
+    }
+
+    /* Buy-back columns. The tab used to be hard-coded placeholders, so an
+       existing table needs them added one by one. */
+    $buybackCheck = db()->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME   = 'properties'
+            AND COLUMN_NAME  = 'buyback_status'"
+    );
+    $buybackCheck->execute();
+    if ((int)$buybackCheck->fetchColumn() === 0) {
+        db()->exec('ALTER TABLE properties ADD COLUMN buyback_status VARCHAR(32) DEFAULT "Not Eligible" AFTER transfer_to');
+        db()->exec('ALTER TABLE properties ADD COLUMN buyback_price DECIMAL(20,2) DEFAULT 0 AFTER buyback_status');
+        db()->exec('ALTER TABLE properties ADD COLUMN buyback_requested_on DATE NULL AFTER buyback_price');
+        db()->exec('ALTER TABLE properties ADD COLUMN buyback_approved_on DATE NULL AFTER buyback_requested_on');
     }
 
     $mediaCheck = db()->prepare(
@@ -4433,7 +4484,8 @@ function property_fields(array $body): array
         'floor' => $t($body['floor'] ?? ''),
         'block' => $t($body['block'] ?? ''),
         'registration_no' => $t($body['registration_no'] ?? ''),
-        'current_status' => $pick($body['current_status'] ?? '', PROPERTY_SALE_STATUSES, 'UnSold'),
+        /* Accept any non-empty status so custom dropdown values survive a save. */
+'current_status' => $t($body['current_status'] ?? '') ?: 'UnSold',
         'status' => $pick($body['status'] ?? '', PROPERTY_STATUSES, 'Active'),
         'sale_price' => $money($body['sale_price'] ?? 0),
         'currency' => $pick($body['currency'] ?? '', PROPERTY_CURRENCIES, 'PKR'),
@@ -4442,6 +4494,8 @@ function property_fields(array $body): array
         'installment_count' => (int)(float)str_replace(',', '', trim((string)($body['installment_count'] ?? '0'))),
         'monthly_installment' => $money($body['monthly_installment'] ?? 0),
         'balloon_payment_available' => $flag($body['balloon_payment_available'] ?? false),
+        'balloon_amount' => $money($body['balloon_amount'] ?? 0),
+        'balloon_payment_count' => (int)(float)str_replace(',', '', trim((string)($body['balloon_payment_count'] ?? '0'))),
         'balloting_fee_available' => $flag($body['balloting_fee_available'] ?? false),
         'balloting_fee' => $money($body['balloting_fee'] ?? 0),
         'possession_fee_available' => $flag($body['possession_fee_available'] ?? false),
@@ -4451,7 +4505,7 @@ function property_fields(array $body): array
         'ready_for_possession' => $flag($body['ready_for_possession'] ?? false),
         'bedrooms' => $t($body['bedrooms'] ?? ''),
         'bathrooms' => $t($body['bathrooms'] ?? ''),
-        'amenities' => mb_substr($t($body['amenities'] ?? ''), 0, 500),
+        'amenities' => $t($body['amenities'] ?? ''),
         'video_url' => mb_substr($t($body['video_url'] ?? ''), 0, 500),
         'contact_email' => mb_substr($t($body['contact_email'] ?? ''), 0, 160),
         'contact_mobile' => mb_substr($t($body['contact_mobile'] ?? ''), 0, 255),
@@ -4467,6 +4521,10 @@ function property_fields(array $body): array
         'transfer_date' => $t($body['transfer_date'] ?? '') ?: null,
         'transfer_from' => $t($body['transfer_from'] ?? ''),
         'transfer_to' => $t($body['transfer_to'] ?? ''),
+        'buyback_status' => $pick($body['buyback_status'] ?? '', PROPERTY_BUYBACK_STATUSES, 'Not Eligible'),
+        'buyback_price' => $money($body['buyback_price'] ?? 0),
+        'buyback_requested_on' => $t($body['buyback_requested_on'] ?? '') ?: null,
+        'buyback_approved_on' => $t($body['buyback_approved_on'] ?? '') ?: null,
         'address' => $t($body['address'] ?? ''),
         'city' => $t($body['city'] ?? ''),
         'area' => $t($body['area'] ?? ''),
@@ -4484,10 +4542,10 @@ function property_payload(array $row): array
     foreach (['sale_price', 'original_price', 'discount'] as $f) {
         if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
-    foreach (['installment_available', 'ready_for_possession', 'installment_count', 'balloon_payment_available', 'balloting_fee_available', 'possession_fee_available', 'development_fee_available'] as $f) {
+    foreach (['installment_available', 'ready_for_possession', 'installment_count', 'balloon_payment_available', 'balloon_payment_count', 'balloting_fee_available', 'possession_fee_available', 'development_fee_available'] as $f) {
         if (isset($row[$f])) $row[$f] = (int)$row[$f];
     }
-    foreach (['advance_amount', 'monthly_installment', 'balloting_fee', 'possession_fee', 'development_fee'] as $f) {
+    foreach (['advance_amount', 'monthly_installment', 'balloon_amount', 'balloting_fee', 'possession_fee', 'development_fee'] as $f) {
         if (isset($row[$f])) $row[$f] = (float)$row[$f];
     }
     foreach (['latitude', 'longitude'] as $f) {
@@ -4564,17 +4622,19 @@ function create_property(array $body): void
             (name, code, property_type, subtype, purpose, floor, block, registration_no,
              current_status, status,
              sale_price, currency, installment_available, advance_amount, installment_count,
-             monthly_installment, balloon_payment_available, balloting_fee_available, balloting_fee,
+             monthly_installment, balloon_payment_available, balloon_amount, balloon_payment_count,
+             balloting_fee_available, balloting_fee,
              possession_fee_available, possession_fee,
              development_fee_available, development_fee, ready_for_possession,
              bedrooms, bathrooms, amenities, video_url,
              contact_email, contact_mobile, contact_landline,
              original_price, discount, payment_plan, customer, agent, sale_date,
              booking_date, transfer_status, transfer_date, transfer_from, transfer_to,
+             buyback_status, buyback_price, buyback_requested_on, buyback_approved_on,
              address, city, area, size, unit, latitude, longitude, description)
          VALUES (:name, :code, :ptype, :subtype, :purpose, :floor, :block, :reg, :cstatus, :status,
                  :sale, :currency, :installment, :adv_amt, :inst_count, :monthly,
-                 :balloon, :balloting_on, :balloting_fee, :pos_fee_on, :pos_fee,
+                 :balloon, :balloon_amt, :balloon_count, :balloting_on, :balloting_fee, :pos_fee_on, :pos_fee,
                  :dev_fee_on, :dev_fee, :possession,
                  :bedrooms, :bathrooms, :amenities, :video_url,
                  :c_email, :c_mobile, :c_landline,
@@ -4593,6 +4653,8 @@ function create_property(array $body): void
         ':inst_count' => $f['installment_count'],
         ':monthly' => $f['monthly_installment'],
         ':balloon' => $f['balloon_payment_available'],
+        ':balloon_amt' => $f['balloon_amount'],
+        ':balloon_count' => $f['balloon_payment_count'],
         ':balloting_on' => $f['balloting_fee_available'], ':balloting_fee' => $f['balloting_fee'],
         ':pos_fee_on' => $f['possession_fee_available'], ':pos_fee' => $f['possession_fee'],
         ':dev_fee_on' => $f['development_fee_available'], ':dev_fee' => $f['development_fee'],
@@ -4606,6 +4668,8 @@ function create_property(array $body): void
         ':sale_date' => $f['sale_date'], ':book_date' => $f['booking_date'],
         ':tstatus' => $f['transfer_status'], ':tdate' => $f['transfer_date'],
         ':tfrom' => $f['transfer_from'], ':tto' => $f['transfer_to'],
+        ':bb_status' => $f['buyback_status'], ':bb_price' => $f['buyback_price'],
+        ':bb_requested' => $f['buyback_requested_on'], ':bb_approved' => $f['buyback_approved_on'],
         ':address' => $f['address'], ':city' => $f['city'], ':area' => $f['area'],
         ':size' => $f['size'], ':unit' => $f['unit'],
         ':latitude' => $f['latitude'], ':longitude' => $f['longitude'],

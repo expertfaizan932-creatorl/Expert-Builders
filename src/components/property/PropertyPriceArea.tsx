@@ -4,6 +4,7 @@ import {
   HiOutlineBanknotes,
   HiOutlineBuildingOffice2,
   HiOutlineCalendarDays,
+  HiOutlineChartBarSquare,
   HiOutlineChevronDown,
   HiOutlineCircleStack,
   HiOutlineCurrencyRupee,
@@ -131,21 +132,26 @@ function FeeRow({ id, icon: Icon, label, on, onToggle, amount = '', onAmount, cu
       </div>
 
       {hasAmount && (
-        <div className="md:pl-2">
-          <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500" htmlFor={id}>
-            Amount
-          </label>
-          <input
-            id={id}
-            type="text"
-            inputMode="numeric"
-            value={amount}
-            onChange={(e) => handleAmount(e.target.value)}
-            placeholder={`Enter Amount in ${currency}`}
-            className={`w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-brand-blue ${
-              on ? 'border-brand-blue/40' : 'border-slate-200'
-            }`}
-          />
+        <div className="flex items-start gap-4">
+          <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+            <HiOutlineTag className="h-5 w-5 -rotate-45" strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <label className="mb-2 block text-[15px] font-bold tracking-tight text-slate-800" htmlFor={id}>
+              Amount
+            </label>
+            <input
+              id={id}
+              type="text"
+              inputMode="numeric"
+              value={amount}
+              onChange={(e) => handleAmount(e.target.value)}
+              placeholder={`Enter Amount in ${currency}`}
+              className={`w-full rounded-xl border bg-slate-50 px-4 py-3 text-[15px] text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-slate-400 focus:bg-white ${
+                on ? 'border-slate-200' : 'border-slate-200'
+              }`}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -171,6 +177,11 @@ interface Props {
   onMonthlyInstallment: (v: string) => void;
   balloonPayment: boolean;
   onBalloonPayment: (v: boolean) => void;
+  balloonAmount: string;
+  onBalloonAmount: (v: string) => void;
+  balloonPaymentCount: string;
+  onBalloonPaymentCount: (v: string) => void;
+  balloonAmountError: string;
   ballotingFee: boolean;
   onBallotingFee: (v: boolean) => void;
   ballotingAmount: string;
@@ -207,6 +218,11 @@ export default function PropertyPriceArea({
   onMonthlyInstallment,
   balloonPayment,
   onBalloonPayment,
+  balloonAmount,
+  onBalloonAmount,
+  balloonPaymentCount,
+  onBalloonPaymentCount,
+  balloonAmountError,
   ballotingFee,
   onBallotingFee,
   ballotingAmount,
@@ -437,16 +453,75 @@ export default function PropertyPriceArea({
               </div>
             </div>
 
-            {/* Fee options */}
-            <FeeRow
-              id="pa-balloon"
-              icon={HiOutlineCircleStack}
-              label="Balloon Payment Available"
-              on={balloonPayment}
-              onToggle={onBalloonPayment}
-              currency={currency}
-            />
+            {/* Balloon payment: toggle plus amount and payment-count fields */}
+            <div className="space-y-6">
+              <Toggle
+                label="Balloon Payment Available"
+                hint="Enable if Applicable"
+                icon={HiOutlineCircleStack}
+                on={balloonPayment}
+                onChange={onBalloonPayment}
+              />
 
+              {balloonPayment && (
+                <div className="grid grid-cols-1 gap-6 pt-2 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-4">
+                      <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                        <HiOutlineTag className="h-5 w-5 -rotate-45" strokeWidth={2.2} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-2 block text-[15px] font-bold tracking-tight text-slate-800" htmlFor="pa-balloon-amount">
+                          Balloon Amount
+                        </label>
+                        <input
+                          id="pa-balloon-amount"
+                          type="text"
+                          inputMode="numeric"
+                          value={balloonAmount}
+                          onChange={(e) => onBalloonAmount(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
+                          placeholder={`Enter Amount in ${currency}`}
+                          style={balloonAmountError ? { borderColor: '#FF4D4F' } : undefined}
+                          className={`w-full rounded-xl border-2 bg-slate-50 px-4 py-3 text-[15px] text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:bg-white focus:border-slate-400 ${
+                            balloonAmountError ? 'border-[#FF4D4F]' : 'border-slate-200'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    {balloonAmountError && (
+                      <p className="pt-1 text-sm font-normal leading-snug text-[#FF3B30]">
+                        {balloonAmountError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-4">
+                      <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                        <HiOutlineChartBarSquare className="h-5 w-5" strokeWidth={2.2} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <label className="mb-2 block text-[15px] font-bold tracking-tight text-slate-800" htmlFor="pa-balloon-count">
+                          No. of Balloon Payments
+                        </label>
+                        <input
+                          id="pa-balloon-count"
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={balloonPaymentCount}
+                          onChange={(e) => onBalloonPaymentCount(e.target.value)}
+                          placeholder="Enter Number"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[15px] text-slate-800 shadow-sm outline-none transition placeholder-slate-400 focus:border-slate-400 focus:bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Fee options */}
             <FeeRow
               id="pa-balloting-fee"
               icon={HiOutlineBanknotes}

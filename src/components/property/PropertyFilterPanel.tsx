@@ -32,6 +32,8 @@ interface Props {
   values: PropertyFilterValues;
   floors: string[];
   blocks: string[];
+  /** Distinct values found in the dataset, so no status is hidden from the filter. */
+  currentStatuses?: string[];
   onChange: (next: PropertyFilterValues) => void;
   onApply: () => void;
   onClear: () => void;
@@ -43,6 +45,7 @@ export default function PropertyFilterPanel({
   values,
   floors,
   blocks,
+  currentStatuses = ['UnSold', 'Sold'],
   onChange,
   onApply,
   onClear,
@@ -106,8 +109,11 @@ export default function PropertyFilterPanel({
               className={selectCls}
             >
               <option value="">All</option>
-              <option>Sold</option>
-              <option>UnSold</option>
+              {currentStatuses.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
           </div>
 

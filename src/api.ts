@@ -546,6 +546,8 @@ export interface Property {
   installment_count: number;
   monthly_installment: number;
   balloon_payment_available: number;
+  balloon_amount: number;
+  balloon_payment_count: number;
   balloting_fee_available: number;
   balloting_fee: number;
   possession_fee_available: number;
@@ -571,6 +573,10 @@ export interface Property {
   transfer_date: string | null;
   transfer_from: string;
   transfer_to: string;
+  buyback_status: string;
+  buyback_price: number;
+  buyback_requested_on: string | null;
+  buyback_approved_on: string | null;
   address: string;
   city: string;
   area: string;
