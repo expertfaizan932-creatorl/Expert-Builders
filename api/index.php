@@ -4655,12 +4655,15 @@ function create_property(array $body): void
     $f = property_fields($body);
     if ($f['name'] === '') fail('Property name is required');
 
-    /* No code from the client? Hand out the next sequential one (1, 2, 3, ...). */
+    /* No code from the client? Hand out the next sequential one: Expert Inv 001, 002, ... */
     if ($f['code'] === '') {
-        $next = db()->query(
-            "SELECT COALESCE(MAX(CAST(code AS UNSIGNED)), 0) + 1 FROM properties WHERE code REGEXP '^[0-9]+$'"
+        $next = (int) db()->query(
+            "SELECT COALESCE(MAX(
+                        IF(code REGEXP '^[0-9]+$', CAST(code AS UNSIGNED),
+                        IF(code LIKE 'Expert Inv %', CAST(SUBSTRING(code, 12) AS UNSIGNED), 0))), 0) + 1
+               FROM properties WHERE code <> ''"
         )->fetchColumn();
-        $f['code'] = (string) (int) $next;
+        $f['code'] = sprintf('Expert Inv %03d', $next);
     }
 
     $stmt = db()->prepare(

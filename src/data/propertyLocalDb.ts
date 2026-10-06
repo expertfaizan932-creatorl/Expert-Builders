@@ -150,13 +150,15 @@ export function localCreateProperty(input: Row) {
   const rows = load();
   const id = rows.reduce((max, p) => Math.max(max, p.id), 0) + 1;
   const row: Property = { ...blank(id), ...(input as Partial<Property>), id };
-  /* No code given? Use the next sequential number, same as the backend. */
+  /* No code given? Hand out the next sequential one, same as the backend. */
   if (!row.code) {
-    const highest = rows.reduce((max, p) => {
-      const n = Number(p.code);
-      return Number.isInteger(n) && n > max ? n : max;
-    }, 0);
-    row.code = String(highest + 1);
+    const seq = (p: Property) => {
+      const m = /(\d+)$/.exec(p.code ?? '');
+      const n = m ? Number(m[1]) : 0;
+      return Number.isInteger(n) ? n : 0;
+    };
+    const highest = rows.reduce((max, p) => Math.max(max, seq(p)), 0);
+    row.code = `Expert Inv ${String(highest + 1).padStart(3, '0')}`;
   }
   rows.push(row);
   save(rows);

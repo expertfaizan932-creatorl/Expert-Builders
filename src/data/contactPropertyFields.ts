@@ -14,6 +14,7 @@ export const CONTACT_TYPE_OPTIONS = ['Lead', 'Customer'] as const;
 export const FILE_STATUS_OPTIONS = ['Active', 'Inactive'] as const;
 
 export const contactPropertyFields: ContactPropertyField[] = [
+  { key: 'cnic', label: 'CNIC', type: 'text', placeholder: 'e.g. 42101-1234567-8' },
   { key: 'registration_no', label: 'Registration number', type: 'text', placeholder: 'e.g. REG-0012' },
   { key: 'son_of', label: 'Son of', type: 'text', placeholder: "Father's name" },
   { key: 'file_no', label: 'File No', type: 'text', placeholder: 'e.g. F-1024' },

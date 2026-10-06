@@ -822,13 +822,18 @@ function withFallback<T>(net: () => Promise<T>, local: () => Promise<T>): Promis
   );
 }
 
-/** Property codes run 1, 2, 3, ... so the next free one is the highest + 1. */
+/** Pull the trailing sequence number out of a code: "7" → 7, "Expert Inv 007" → 7. */
+function codeSequenceNumber(code: string): number {
+  const m = /(\d+)$/.exec(code ?? '');
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return Number.isInteger(n) ? n : 0;
+}
+
+/** Property codes run Expert Inv 001, 002, ... so the next free one is the highest + 1. */
 function nextPropertyCode(rows: Property[]): string {
-  const highest = rows.reduce((max, p) => {
-    const n = Number(p.code);
-    return Number.isInteger(n) && n > max ? n : max;
-  }, 0);
-  return String(highest + 1);
+  const highest = rows.reduce((max, p) => Math.max(max, codeSequenceNumber(p.code ?? '')), 0);
+  return `Expert Inv ${String(highest + 1).padStart(3, '0')}`;
 }
 
 /** Rows already tried for a code backfill, so a failing server is not hammered. */
@@ -918,7 +923,8 @@ export const api = {
 
   /** Listings saved before codes existed: give them the next sequential number once. */
   fillPropertyCodes: async (rows: Property[]) => {
-    let next = Number(nextPropertyCode(rows));
+    let next =
+      rows.reduce((max, p) => Math.max(max, codeSequenceNumber(p.code ?? '')), 0) + 1;
     const out: Property[] = [];
     for (const row of rows) {
       if (row.code || codeFillAttempted.has(row.id)) {
@@ -926,7 +932,7 @@ export const api = {
         continue;
       }
       codeFillAttempted.add(row.id);
-      const code = String(next++);
+      const code = `Expert Inv ${String(next++).padStart(3, '0')}`;
       /* Older API builds need the whole row in the body, newer ones only the code. */
       const attempts: Partial<Property>[] = [{ code }, { ...row, code }];
       let filled = { ...row, code };

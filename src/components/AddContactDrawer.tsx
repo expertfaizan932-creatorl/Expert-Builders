@@ -457,6 +457,18 @@ function AddContactDrawer({ open, onClose, onSave, onNotify, editingContact }: A
             </button>
           </div>
 
+          {/* CNIC */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">CNIC</label>
+            <input
+              type="text"
+              placeholder="Enter CNIC number"
+              value={properties.cnic ?? ''}
+              onChange={(e) => setProperties((prev) => ({ ...prev, cnic: e.target.value }))}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
           {/* Contact type */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
@@ -485,7 +497,9 @@ function AddContactDrawer({ open, onClose, onSave, onNotify, editingContact }: A
           <div className="border border-slate-200 rounded-lg p-3.5 space-y-3 bg-white">
             <span className="block font-semibold text-slate-700">Property &amp; booking details</span>
             <div className="grid grid-cols-2 gap-3">
-              {contactPropertyFields.map((field) => {
+              {contactPropertyFields
+                .filter((field) => field.key !== 'cnic')
+                .map((field) => {
                 const value = properties[field.key] ?? '';
                 const controlClass =
                   'w-full border border-slate-300 rounded-md px-3 py-2 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-white text-slate-700';
