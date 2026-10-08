@@ -280,7 +280,12 @@ export default function PropertyAmenities({
             <label className="mb-2.5 block text-sm font-bold text-slate-800">Bedrooms</label>
             <div className="flex flex-wrap items-center gap-2">
               {BEDROOM_CHIPS.map((c) => (
-                <Chip key={c} label={c} on={bedrooms === c} onSelect={() => onBedrooms(c)} />
+                <Chip
+                  key={c}
+                  label={c}
+                  on={bedrooms === c}
+                  onSelect={() => onBedrooms(bedrooms === c ? '' : c)}
+                />
               ))}
             </div>
           </div>
@@ -295,7 +300,12 @@ export default function PropertyAmenities({
             <label className="mb-2.5 block text-sm font-bold text-slate-800">Bathrooms</label>
             <div className="flex flex-wrap items-center gap-2">
               {BATHROOM_CHIPS.map((c) => (
-                <Chip key={c} label={c} on={bathrooms === c} onSelect={() => onBathrooms(c)} />
+                <Chip
+                  key={c}
+                  label={c}
+                  on={bathrooms === c}
+                  onSelect={() => onBathrooms(bathrooms === c ? '' : c)}
+                />
               ))}
             </div>
           </div>

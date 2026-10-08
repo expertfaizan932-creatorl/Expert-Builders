@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import {
   FaFileInvoice,
   FaFilePdf,
@@ -11,8 +20,15 @@ import {
   FaPenToSquare,
   FaChartLine,
 } from 'react-icons/fa6';
-import { api, type ApiReceipt, type ReceiptInput } from '../api';
+import {
+  api,
+  type ApiAccountStatement,
+  type ApiContact,
+  type ApiReceipt,
+  type ReceiptInput,
+} from '../api';
 import { useAuth } from '../auth';
+import { readContactProperties } from '../data/contactPropertyFields';
 import BrandLogo from './BrandLogo';
 
 /* ------------------------------ helpers ------------------------------ */
@@ -105,6 +121,91 @@ function numberToEnglishWords(input: number): string {
   return parts.join(' ');
 }
 
+/* ------------------- Reg # auto-sync (contact lookup) --------------- */
+
+/** Loose comparison key so "RDC/1487-1" matches "RDC14871". */
+function looseKey(value: string | null | undefined): string {
+  return String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function cleanReg(value: string | null | undefined): string {
+  return String(value ?? '').trim();
+}
+
+/** "File # 1487, Hill View Block, 1 Kanal" built from an account statement. */
+function fileDetailsFromStatement(s: ApiAccountStatement): string {
+  const parts: string[] = [];
+  if (cleanReg(s.file_no)) parts.push(`File # ${cleanReg(s.file_no)}`);
+  const block = cleanReg(s.block);
+  if (block) parts.push(/block/i.test(block) ? block : `${block} Block`);
+  if (cleanReg(s.plot_size)) parts.push(cleanReg(s.plot_size));
+  if (!parts.length && cleanReg(s.file_type)) parts.push(cleanReg(s.file_type));
+  return parts.join(', ');
+}
+
+/** Same idea, built from a contact's "Property & booking details" fields. */
+function fileDetailsFromContact(props: Record<string, string>): string {
+  const parts: string[] = [];
+  if (cleanReg(props.file_no)) parts.push(`File # ${cleanReg(props.file_no)}`);
+  if (cleanReg(props.plot_size)) parts.push(cleanReg(props.plot_size));
+  if (cleanReg(props.file_type)) parts.push(cleanReg(props.file_type));
+  if (cleanReg(props.address)) parts.push(cleanReg(props.address));
+  return parts.join(', ');
+}
+
+/** Best statement for a typed reg #: exact reg, exact file, then contains. */
+function pickStatement(rows: ApiAccountStatement[], reg: string): ApiAccountStatement | null {
+  const q = cleanReg(reg).toLowerCase();
+  const lq = looseKey(reg);
+  if (!q) return null;
+  const exact = rows.find((s) => cleanReg(s.registration_no).toLowerCase() === q);
+  if (exact) return exact;
+  const loose = rows.find(
+    (s) => looseKey(s.registration_no) === lq || looseKey(s.file_no) === lq,
+  );
+  if (loose) return loose;
+  return (
+    rows.find(
+      (s) =>
+        cleanReg(s.registration_no).toLowerCase().includes(q) ||
+        cleanReg(s.file_no).toLowerCase().includes(q),
+    ) ?? null
+  );
+}
+
+/** Same matching rules against the contact list (custom_fields.registration_no). */
+function pickContact(contacts: ApiContact[], reg: string): ApiContact | null {
+  const q = cleanReg(reg).toLowerCase();
+  const lq = looseKey(reg);
+  if (!q) return null;
+  const by = (key: 'registration_no' | 'file_no') => {
+    for (const c of contacts) {
+      const v = readContactProperties(c.custom_fields)[key];
+      if (!v) continue;
+      if (v.toLowerCase() === q || looseKey(v) === lq) return c;
+    }
+    return null;
+  };
+  const exact = by('registration_no') ?? by('file_no');
+  if (exact) return exact;
+  for (const c of contacts) {
+    const v = readContactProperties(c.custom_fields).registration_no;
+    if (v && v.toLowerCase().includes(q)) return c;
+  }
+  return null;
+}
+
+/** What a successful Reg # lookup fills into the voucher. */
+interface RegMatch {
+  source: 'Account Statement' | 'Contact';
+  regNo: string;
+  name: string;
+  fileDetails: string;
+  previousBalance: number | null;
+}
+
+type RegStatus = 'idle' | 'searching' | 'matched' | 'missing' | 'error';
+
 /* ----------------------- voucher form state ------------------------- */
 
 interface VoucherFormState {
@@ -152,6 +253,107 @@ const RV = {
   grey: '#666666', // address line
   paid: '#C80F12', // PAID stamp
 };
+
+/* ----------------------------- shared cell --------------------------- */
+
+type FieldCellProps = {
+  label: string;
+  value: string;
+  onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  className?: string;
+  bold?: boolean;
+  kind?: 'text' | 'number';
+  placeholder?: string;
+  step?: string;
+  labelW?: number;
+  twoLine?: boolean;
+};
+
+/**
+ * One editable "label | value" pair (mirrors the PDF table pairing).
+ *
+ * The cell is a flex/grid item: it keeps a sensible minimum width so rows
+ * reflow (stack) on small screens instead of overlapping. Long values are
+ * wrapped by an auto-growing textarea on screen, while print / PDF export
+ * swap in the plain-text echo (`.rv-echo`) so nothing is ever clipped.
+ */
+function FieldCell({
+  label,
+  value,
+  onChange,
+  className = '',
+  bold = false,
+  kind = 'text',
+  placeholder = '',
+  step = 'any',
+  labelW = 32,
+  twoLine = true,
+}: FieldCellProps) {
+  const valueRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const fitValue = useCallback(() => {
+    const el = valueRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight + 1}px`;
+  }, []);
+
+  useLayoutEffect(fitValue, [fitValue, value]);
+
+  useEffect(() => {
+    window.addEventListener('resize', fitValue);
+    return () => window.removeEventListener('resize', fitValue);
+  }, [fitValue]);
+
+  const controlCls = `w-full min-w-0 bg-transparent p-0 text-center text-[10px] sm:text-[11px] leading-[1.4] font-semibold text-[#222222] outline-none placeholder:text-[#9aa4ad] ${
+    bold ? 'font-bold' : ''
+  }`;
+
+  const echoCls = `rv-echo w-full min-w-0 text-center text-[10px] sm:text-[11px] leading-[1.4] font-semibold text-[#222222] break-words [overflow-wrap:anywhere] ${
+    bold ? 'font-bold' : ''
+  }`;
+
+  return (
+    <div
+      className={`flex flex-wrap flex-1 min-w-[55%] sm:min-w-[140px] items-stretch box-border overflow-hidden bg-white ${className}`}
+    >
+      <div
+        className={`flex flex-[1_1_auto] items-center justify-center px-1 sm:px-1.5 py-1 sm:py-1.5 text-center text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wide text-[#222222] leading-[1.15] break-words max-w-[160px] [overflow-wrap:anywhere] ${
+          twoLine ? '' : 'whitespace-nowrap'
+        }`}
+        style={{ backgroundColor: RV.labelCell, width: `${labelW}%`, minWidth: 64 }}
+      >
+        {label}
+      </div>
+      <div
+        className={`rv-input flex flex-[100_1_80px] min-w-0 flex-col justify-center overflow-hidden px-1 sm:px-1.5 py-1 sm:py-1.5 ${
+          bold ? 'font-bold' : ''
+        }`}
+      >
+        {kind === 'number' ? (
+          <input
+            type="number"
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            step={step}
+            className={controlCls}
+          />
+        ) : (
+          <textarea
+            ref={valueRef}
+            rows={1}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            className={`${controlCls} resize-none overflow-hidden`}
+          />
+        )}
+        <div className={echoCls}>{value}</div>
+      </div>
+    </div>
+  );
+}
 
 /* --------------------- lazy html2pdf (CDN) loader -------------------- */
 
@@ -378,10 +580,189 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
       });
     };
 
+  /* ------------------ Reg # auto-sync from contact ------------------- */
+
+  const [regState, setRegState] = useState<{ status: RegStatus; hint: string }>({
+    status: 'idle',
+    hint: '',
+  });
+  const [regSuggestions, setRegSuggestions] = useState<ApiAccountStatement[]>([]);
+  const [regMenuOpen, setRegMenuOpen] = useState(false);
+  const [regFocused, setRegFocused] = useState(false);
+
+  const contactsCache = useRef<ApiContact[] | null>(null);
+  const contactsRequest = useRef<Promise<ApiContact[]> | null>(null);
+  const receiptNoRef = useRef(form.receiptNo);
+  receiptNoRef.current = form.receiptNo;
+
+  /** Full contact list, fetched once and reused for later Reg # lookups. */
+  const loadAllContacts = useCallback(() => {
+    if (contactsCache.current) return Promise.resolve(contactsCache.current);
+    if (!contactsRequest.current) {
+      contactsRequest.current = api
+        .listContacts({})
+        .then((res) => {
+          contactsCache.current = res.data;
+          return res.data;
+        })
+        .catch((err) => {
+          contactsRequest.current = null;
+          throw err;
+        });
+    }
+    return contactsRequest.current;
+  }, []);
+
+  /** Push a lookup result into the voucher (never blanks a filled field). */
+  const applyRegMatch = useCallback(
+    (m: RegMatch) => {
+      setForm((prev) => {
+        const next = { ...prev };
+        if (m.regNo) next.regNo = m.regNo;
+        if (m.name) next.receivedFrom = m.name;
+        if (m.fileDetails) next.fileDetails = m.fileDetails;
+        if (m.previousBalance !== null && Number.isFinite(m.previousBalance)) {
+          next.previousBalance = String(m.previousBalance);
+        }
+        return next;
+      });
+      setRegState({ status: 'matched', hint: `Synced · ${m.source}` });
+      if (!receiptNoRef.current.trim()) {
+        api
+          .nextReceiptNumber()
+          .then((res) =>
+            setForm((prev) =>
+              prev.receiptNo.trim() ? prev : { ...prev, receiptNo: res.data.receipt_no },
+            ),
+          )
+          .catch(() => undefined);
+      }
+      onNotify(
+        `Reg # ${m.regNo || cleanReg(m.name)} synced — Received From, Previous Balance & File Details filled from ${m.source}`,
+      );
+    },
+    [onNotify],
+  );
+
+  /** Look a registration number up in account statements, then contacts. */
+  const syncFromRegistration = useCallback(
+    async (rawReg: string) => {
+      const reg = cleanReg(rawReg);
+      if (!reg) {
+        setRegState({ status: 'idle', hint: '' });
+        return;
+      }
+      setRegState({ status: 'searching', hint: 'Syncing…' });
+      try {
+        const res = await api.listAccountStatements({ search: reg });
+        const st = pickStatement(res.data, reg);
+        if (st) {
+          applyRegMatch({
+            source: 'Account Statement',
+            regNo: cleanReg(st.registration_no) || reg,
+            name: cleanReg(st.member_name),
+            fileDetails: fileDetailsFromStatement(st),
+            previousBalance: st.balance ?? null,
+          });
+          return;
+        }
+
+        const contacts = await loadAllContacts();
+        const ct = pickContact(contacts, reg);
+        if (ct) {
+          const props = readContactProperties(ct.custom_fields);
+          applyRegMatch({
+            source: 'Contact',
+            regNo: props.registration_no || reg,
+            name: cleanReg(ct.name) || cleanReg(`${ct.first_name} ${ct.last_name}`),
+            fileDetails: fileDetailsFromContact(props),
+            previousBalance: null,
+          });
+          return;
+        }
+
+        setRegState({ status: 'missing', hint: 'Not found' });
+        onNotify(`No contact or account statement found for Reg # "${reg}"`);
+      } catch (err) {
+        setRegState({ status: 'error', hint: 'Lookup failed' });
+        onNotify(`Reg # lookup failed: ${(err as Error).message}`);
+      }
+    },
+    [applyRegMatch, loadAllContacts, onNotify],
+  );
+
+  /* Reg # suggestions: account statements matching what is being typed. */
+  useEffect(() => {
+    const term = cleanReg(form.regNo);
+    if (term.length < 2 || !regFocused) {
+      setRegSuggestions([]);
+      setRegMenuOpen(false);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api
+        .listAccountStatements({ search: term })
+        .then((res) => {
+          if (cancelled) return;
+          const rows = res.data.slice(0, 8);
+          setRegSuggestions(rows);
+          setRegMenuOpen(rows.length > 0);
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [form.regNo, regFocused]);
+
+  const selectRegSuggestion = (s: ApiAccountStatement) => {
+    setRegMenuOpen(false);
+    setRegFocused(false);
+    setForm((prev) => ({ ...prev, regNo: cleanReg(s.registration_no) || prev.regNo }));
+    applyRegMatch({
+      source: 'Account Statement',
+      regNo: cleanReg(s.registration_no),
+      name: cleanReg(s.member_name),
+      fileDetails: fileDetailsFromStatement(s),
+      previousBalance: s.balance ?? null,
+    });
+  };
+
+  const handleRegKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      setRegMenuOpen(false);
+      void syncFromRegistration(form.regNo);
+    } else if (e.key === 'Escape') {
+      setRegMenuOpen(false);
+    }
+  };
+
+  const handleRegBlur = () => {
+    setRegFocused(false);
+    window.setTimeout(() => setRegMenuOpen(false), 120);
+    void syncFromRegistration(form.regNo);
+  };
+
+  const regChip: { text: string; cls: string } = {
+    text: regState.hint,
+    cls:
+      regState.status === 'matched'
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        : regState.status === 'searching'
+          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          : regState.status === 'missing' || regState.status === 'error'
+            ? 'bg-rose-50 text-rose-700 border-rose-200'
+            : 'bg-slate-50 text-slate-500 border-slate-200',
+  };
+
   const handleNew = () => {
     setEditingId(null);
     setView('editor');
     setForm(emptyFormWithDefaults());
+    setRegState({ status: 'idle', hint: '' });
     api
       .nextReceiptNumber()
       .then((res) => setForm((prev) => ({ ...prev, receiptNo: res.data.receipt_no })))
@@ -439,6 +820,7 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
 
   const handleLoad = (r: ApiReceipt) => {
     setEditingId(r.id);
+    setRegState({ status: 'idle', hint: '' });
     setForm({
       receiptNo: r.receipt_no,
       regNo: r.reg_no ?? '',
@@ -475,22 +857,33 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
   const handleDownloadPdf = async () => {
     if (!docRef.current || pdfBusy) return;
     setPdfBusy(true);
+    const doc = docRef.current;
     try {
       const html2pdf = await loadHtml2Pdf();
+      /* Swap live inputs for their text echo so long values are never cut. */
+      doc.classList.add('rv-export');
       await html2pdf()
         .set({
           margin: [0.2, 0.2, 0.2, 0.2],
           filename: `ExpertBuilders_Receipt_Voucher_${form.receiptNo.trim() || 'draft'}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: Math.max(800, doc.offsetWidth || 0),
+          },
           jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
         })
-        .from(docRef.current)
+        .from(doc)
         .save();
     } catch (err) {
       onNotify(`${(err as Error).message} - opening the print dialog instead`);
       window.print();
     } finally {
+      doc.classList.remove('rv-export');
       setPdfBusy(false);
     }
   };
@@ -523,71 +916,28 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
   const dashCount = filteredReceipts.length;
   const dashTotal = filteredReceipts.reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
-  /* ----------------------------- shared cell --------------------------- */
-
-  /** One editable "label | value" pair (mirrors the PDF table pairing). */
-  const FieldCell = ({
-    label,
-    value,
-    onChange,
-    className = '',
-    bold = false,
-    merged = false,
-    kind = 'text',
-    placeholder = '',
-    step = 'any',
-    labelW = 32,
-    twoLine = true,
-  }: {
-    label: string;
-    value: string;
-    onChange: (e: ChangeEvent<HTMLInputElement>) => void;
-    className?: string;
-    bold?: boolean;
-    merged?: boolean;
-    kind?: 'text' | 'number';
-    placeholder?: string;
-    step?: string;
-    labelW?: number;
-    twoLine?: boolean;
-  }) => (
-    <div
-      className={`flex items-stretch flex-1 min-w-0 overflow-hidden box-border ${
-        merged ? '' : 'border-r border-[#7F8C8D]'
-      } ${className}`}
-    >
-      <div
-        className={`flex items-center px-1.5 sm:px-2 py-1.5 text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wide text-[#222222] leading-[1.15] ${twoLine ? '' : 'whitespace-nowrap'}`}
-        style={{ backgroundColor: RV.labelCell, width: `${labelW}%`, minWidth: 0 }}
-      >
-        {label}
-      </div>
-      <input
-        type={kind}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        step={kind === 'number' ? step : undefined}
-        className={`rv-input flex-1 min-w-0 w-full px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] bg-transparent font-semibold text-[#222222] placeholder-[#9aa4ad] ${
-          bold ? 'font-bold' : ''
-        }`}
-      />
-    </div>
-  );
-
   return (
     <>
       <style>{`
         .rv-input { border-bottom: 1.5px dotted #b6bfc7; background: transparent; transition: border-color .15s ease; }
-        .rv-input:focus { border-bottom: 1.5px solid #123A7A; outline: none; background-color: rgba(254, 243, 199, 0.35); }
+        .rv-input:focus-within { border-bottom: 1.5px solid #123A7A; outline: none; background-color: rgba(254, 243, 199, 0.35); }
+        .rv-input > input, .rv-input > textarea { font-family: inherit; }
+        .rv-echo { display: none; }
         .rv-sel { border-bottom: 1.5px dotted #b6bfc7; background: transparent; }
         .rv-sel:focus { border-bottom: 1.5px solid #123A7A; outline: none; }
+        /* PDF export: swap live controls for the plain-text echo (never clipped) */
+        .rv-page.rv-export .rv-input > input,
+        .rv-page.rv-export .rv-input > textarea { display: none; }
+        .rv-page.rv-export .rv-echo { display: block; }
         @media print {
           body.rv-printing * { visibility: hidden !important; }
           body.rv-printing .rv-page, body.rv-printing .rv-page * { visibility: visible !important; }
           body.rv-printing .rv-scroll-host { overflow: visible !important; padding: 0 !important; }
           body.rv-printing .rv-page { position: absolute; left: 0; top: 0; width: 100% !important; min-width: 0 !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; }
           body.rv-printing input, body.rv-printing select { border: none !important; box-shadow: none !important; background: transparent !important; }
+          body.rv-printing .rv-input > input,
+          body.rv-printing .rv-input > textarea { display: none !important; }
+          body.rv-printing .rv-echo { display: block !important; }
         }
       `}</style>
 
@@ -862,7 +1212,7 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
                   <div className="space-y-3 text-xs">
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
-                        <span className="block font-semibold text-slate-700 mb-1">Receipt No</span>
+                        <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4">Receipt No</span>
                         <input
                           type="text"
                           value={form.receiptNo}
@@ -870,20 +1220,60 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-slate-800 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
                         />
                       </label>
-                      <label className="block">
-                        <span className="block font-semibold text-slate-700 mb-1">Reg #</span>
+                      <label className="block relative">
+                        <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4 flex items-center justify-between gap-1">
+                          <span className="truncate">Reg #</span>
+                          {regState.status !== 'idle' && (
+                            <span
+                              className={`text-[9px] leading-none font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded ${regChip.cls}`}
+                            >
+                              {regChip.text}
+                            </span>
+                          )}
+                        </span>
                         <input
                           type="text"
-                          placeholder="e.g. RDC-1487"
+                          placeholder="Type reg # / file #"
                           value={form.regNo}
                           onChange={setField('regNo')}
+                          onKeyDown={handleRegKeyDown}
+                          onFocus={() => setRegFocused(true)}
+                          onBlur={handleRegBlur}
+                          autoComplete="off"
                           className="w-full p-2 border border-slate-300 rounded font-mono focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
                         />
+                        {regMenuOpen && regSuggestions.length > 0 && (
+                          <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl text-[11px]">
+                            {regSuggestions.map((s) => (
+                              <li
+                                key={s.id}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  selectRegSuggestion(s);
+                                }}
+                                className="px-2.5 py-2 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-brand-blue/10"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-mono font-bold text-slate-800">
+                                    {s.registration_no || '—'}
+                                  </span>
+                                  <span className="font-semibold text-slate-600 truncate">
+                                    {s.member_name}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 truncate">
+                                  {fileDetailsFromStatement(s) || 'No file details'} · Balance Rs{' '}
+                                  {formatMoney(s.balance ?? 0)}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </label>
                     </div>
 
                     <label className="block">
-                      <span className="block font-semibold text-slate-700 mb-1">Date</span>
+                      <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4">Date</span>
                       <input
                         type="text"
                         placeholder="DD/MM/YYYY"
@@ -894,7 +1284,7 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
                     </label>
 
                     <label className="block">
-                      <span className="block font-semibold text-slate-700 mb-1">Received From</span>
+                      <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4">Received From</span>
                       <input
                         type="text"
                         placeholder="Customer / member name"
@@ -906,22 +1296,26 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
 
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
-                        <span className="block font-semibold text-slate-700 mb-1">Amount Received (PKR)</span>
+                        <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4 whitespace-nowrap overflow-hidden text-ellipsis">
+                          Amount Received (PKR)
+                        </span>
                         <input
                           type="number"
                           step="1"
                           placeholder="e.g. 15000"
                           value={form.amount}
                           onChange={setField('amount')}
-                          className="w-full p-2 border border-slate-300 rounded font-bold text-sm text-slate-800 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
+                          className="w-full p-2 border border-slate-300 rounded font-bold text-xs text-slate-800 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
                         />
                       </label>
                       <label className="block">
-                        <span className="block font-semibold text-slate-700 mb-1">Payment Via</span>
+                        <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4 whitespace-nowrap overflow-hidden text-ellipsis">
+                          Payment Via
+                        </span>
                         <select
                           value={form.paymentVia}
                           onChange={setField('paymentVia')}
-                          className="w-full p-2 border border-slate-300 rounded bg-white focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
+                          className="w-full p-2 border border-slate-300 rounded bg-white text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
                         >
                           <option value="Cash">Cash</option>
                           <option value="Bank Transfer">Bank Transfer</option>
@@ -934,11 +1328,13 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
 
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
-                        <span className="block font-semibold text-slate-700 mb-1">Payment Type</span>
+                        <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4 whitespace-nowrap overflow-hidden text-ellipsis">
+                          Payment Type
+                        </span>
                         <select
                           value={form.paymentType}
                           onChange={setField('paymentType')}
-                          className="w-full p-2 border border-slate-300 rounded bg-white focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
+                          className="w-full p-2 border border-slate-300 rounded bg-white text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
                         >
                           <option value="Advance">Advance</option>
                           <option value="Regular Installment">Regular Installment</option>
@@ -948,20 +1344,22 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
                         </select>
                       </label>
                       <label className="block">
-                        <span className="block font-semibold text-slate-700 mb-1">Previous Balance</span>
+                        <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4 whitespace-nowrap overflow-hidden text-ellipsis">
+                          Previous Balance
+                        </span>
                         <input
                           type="number"
                           step="1"
                           placeholder="e.g. 1400000"
                           value={form.previousBalance}
                           onChange={setField('previousBalance')}
-                          className="w-full p-2 border border-slate-300 rounded font-semibold focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
+                          className="w-full p-2 border border-slate-300 rounded font-semibold text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue/40"
                         />
                       </label>
                     </div>
 
                     <label className="block">
-                      <span className="block font-semibold text-slate-700 mb-1">File Details</span>
+                      <span className="block font-semibold text-slate-700 mb-1 h-4 leading-4">File Details</span>
                       <input
                         type="text"
                         placeholder="e.g. File # 1487, Hill View Block"
@@ -1064,51 +1462,54 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
             </div>
 
             {/* -------------------- Document canvas -------------------- */}
-              <div className="lg:col-span-8">
-                <div className="rv-scroll-host flex justify-start md:justify-center items-start overflow-x-auto pb-6">
-                  <div className="w-full min-w-[680px] max-w-[800px] px-0.5">
+              <div className="lg:col-span-8 min-w-0">
+                <div className="rv-scroll-host flex justify-center items-start overflow-x-auto pb-6">
+                  <div className="w-full min-w-0 max-w-[800px] px-0.5">
                     <div
                       ref={docRef}
                       className="rv-page bg-white shadow-xl shadow-slate-900/10 rounded-xl text-[#222222] relative overflow-hidden ring-1 ring-slate-200 w-full"
-                      style={{ minHeight: 1180, fontFamily: "Arial, 'Segoe UI', sans-serif" }}
+                      style={{ minHeight: 1180, fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" }}
                     >
                       {/* Header: Left Logo | Center Text | Right QR */}
-                      <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-2">
-                        <div className="flex items-center justify-start w-[26%] shrink-0">
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 sm:px-6 pt-5 sm:pt-6 pb-2">
+                        <div className="flex items-center justify-start w-auto sm:w-[26%] shrink-0 min-w-0">
                           {logoDataUrl ? (
                             <img
                               src={logoDataUrl}
                               alt="Company Logo"
-                              className="object-contain"
-                              style={{ height: logoHeight, maxWidth: 150 }}
+                              className="object-contain max-w-full"
+                              style={{ maxHeight: logoHeight, maxWidth: 'min(100%, 150px)' }}
                             />
                           ) : (
                             <img
                               src="/receipt-logo.png"
                               alt="Expert Marketing & Developers Logo"
-                              className="object-contain"
-                              style={{ height: logoHeight, maxWidth: 150 }}
+                              className="object-contain max-w-full"
+                              style={{ maxHeight: logoHeight, maxWidth: 'min(100%, 150px)' }}
                             />
                           )}
                         </div>
-                        <div className="text-center flex-1 space-y-1">
+                        <div className="text-center flex-1 min-w-[210px] order-last sm:order-none space-y-1">
                           <h1
-                            className="text-[19px] font-black uppercase tracking-[0.05em] inline-block pb-0.5 border-b-2 border-[#222222]"
+                            className="text-[15px] sm:text-[19px] font-black uppercase tracking-[0.05em] inline-block max-w-full pb-0.5 border-b-2 border-[#222222] break-words [overflow-wrap:anywhere]"
                             style={{ color: RV.dark }}
                           >
                             {COMPANY_LINE}
                           </h1>
-                          <p className="text-[10.5px] mt-1 leading-tight max-w-[480px] mx-auto" style={{ color: RV.grey }}>
+                          <p className="text-[10.5px] mt-1 leading-tight max-w-[480px] mx-auto break-words [overflow-wrap:anywhere]" style={{ color: RV.grey }}>
                             {COMPANY_ADDRESS}
                           </p>
-                          <p className="text-[10.5px] font-semibold pt-0.5" style={{ color: RV.dark }}>
+                          <p
+                            className="text-[10.5px] font-semibold pt-0.5 break-words [overflow-wrap:anywhere]"
+                            style={{ color: RV.dark }}
+                          >
                             {COMPANY_CONTACT_ALT}
                           </p>
                         </div>
-                        <div className="flex flex-col items-center justify-center w-[26%] shrink-0">
+                        <div className="flex flex-col items-center justify-center w-auto sm:w-[26%] shrink-0 min-w-0">
                           <div
                             ref={qrHostRef}
-                            className="p-0.5 border border-slate-300 bg-white"
+                            className="p-0.5 border border-slate-300 bg-white shrink-0"
                             style={{ width: qrSize + 4, height: qrSize + 4 }}
                           />
                           <span className="text-[8.5px] font-bold text-slate-800 mt-1 uppercase tracking-tight">
@@ -1119,39 +1520,50 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
 
                       {/* Banner */}
                       <div
-                        className="flex items-center justify-center"
-                        style={{ backgroundColor: RV.banner, height: 46 }}
+                        className="flex items-center justify-center px-3"
+                        style={{ backgroundColor: RV.banner, minHeight: 46 }}
                       >
-                        <h2 className="text-white font-black uppercase tracking-[0.15em] text-[19px]">
+                        <h2 className="text-white font-black uppercase tracking-[0.15em] text-[15px] sm:text-[19px] text-center">
                           Receipt Voucher
                         </h2>
                       </div>
 
                       {/* Field grid — exact layout of Expert_Receipt_Voucher.pdf */}
-                      <div className="px-6 pt-5">
-                        <div className="rounded-md overflow-hidden" style={{ border: `1px solid ${RV.border}` }}>
+                      <div className="px-3 sm:px-6 pt-4">
+                        <div
+                          className="rounded-md overflow-hidden"
+                          style={{ border: `1px solid ${RV.border}` }}
+                        >
                           {/* Row 1: Receipt No | Reg # | Date | Amount */}
-                          <div className="flex" style={{ borderBottom: `1px solid ${RV.border}` }}>
+                          <div
+                            className="flex flex-wrap gap-px"
+                            style={{ backgroundColor: RV.border, borderBottom: `1px solid ${RV.border}` }}
+                          >
                             <FieldCell label="Receipt No" value={form.receiptNo} onChange={setField('receiptNo')} kind="text" labelW={34} />
                             <FieldCell label="Reg #" value={form.regNo} onChange={setField('regNo')} kind="text" labelW={24} />
                             <FieldCell label="Date" value={formatDatePDF(form.dated)} onChange={setField('dated')} kind="text" labelW={18} />
-                            <FieldCell label="Amount" value={form.amount} onChange={setField('amount')} kind="number" labelW={20} merged />
+                            <FieldCell label="Amount" value={form.amount} onChange={setField('amount')} kind="number" labelW={20} />
                           </div>
 
                           {/* Row 2: Received From (full width) */}
-                          <div className="flex" style={{ borderBottom: `1px solid ${RV.border}` }}>
+                          <div
+                            className="flex flex-wrap gap-px"
+                            style={{ backgroundColor: RV.border, borderBottom: `1px solid ${RV.border}` }}
+                          >
                             <FieldCell
                               label="Received From"
                               value={form.receivedFrom}
                               onChange={setField('receivedFrom')}
                               kind="text"
-                              merged
                               labelW={9}
                             />
                           </div>
 
                           {/* Row 3: Amount in Words | Current Balance | Payment Type | Previous Balance */}
-                          <div className="flex" style={{ borderBottom: `1px solid ${RV.border}` }}>
+                          <div
+                            className="flex flex-wrap gap-px"
+                            style={{ backgroundColor: RV.border, borderBottom: `1px solid ${RV.border}` }}
+                          >
                             <FieldCell
                               label="Amount in Words"
                               value={amountWords || autoWords}
@@ -1180,27 +1592,29 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
                               onChange={setField('previousBalance')}
                               kind="number"
                               labelW={20}
-                              merged
                             />
                           </div>
 
                           {/* Row 4: Payment Via | File Details */}
-                          <div className="flex">
+                          <div className="flex flex-wrap gap-px" style={{ backgroundColor: RV.border }}>
                             <FieldCell label="Payment Via" value={form.paymentVia} onChange={setField('paymentVia')} kind="text" labelW={34} />
-                            <FieldCell label="File Details" value={form.fileDetails} onChange={setField('fileDetails')} kind="text" labelW={24} merged />
+                            <FieldCell label="File Details" value={form.fileDetails} onChange={setField('fileDetails')} kind="text" labelW={24} />
                           </div>
                         </div>
 
                         {/* Summary bar — mirrors the PDF's highlight panel */}
                         <div className="mt-4" style={{ borderTop: `2px solid ${RV.dark}`, borderBottom: `2px solid ${RV.dark}` }}>
-                          <div className="flex items-center justify-between px-3 py-2" style={{ backgroundColor: RV.labelCell }}>
-                            <div>
+                          <div
+                            className="flex flex-col gap-1 px-3 py-1.5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left"
+                            style={{ backgroundColor: RV.labelCell }}
+                          >
+                            <div className="break-words">
                               <span className="font-extrabold text-[13px]" style={{ color: RV.dark }}>
                                 Amount Received:{' '}
                                 <span className="font-black">Rs {formatMoney(amount)}/-</span>
                               </span>
                             </div>
-                            <div className="text-right">
+                            <div className="break-words sm:text-right">
                               <span className="font-extrabold text-[13px]" style={{ color: RV.dark }}>
                                 Current Balance:{' '}
                                 <span className="font-black">Rs {formatMoney(currentBalance)}/-</span>
@@ -1226,26 +1640,27 @@ export default function ReceiptVoucherPage({ onNotify }: ReceiptVoucherPageProps
                           <span className="font-black text-[34px] leading-none tracking-[0.06em]">PAID</span>
                         </div>
                         <div
-                          className="mx-auto rounded-md"
-                          style={{ width: 320, height: 92, border: `1px solid ${RV.border}`, background: 'transparent' }}
+                          className="mx-auto rounded-md w-full max-w-[320px]"
+                          style={{ height: 92, border: `1px solid ${RV.border}`, background: 'transparent' }}
                         >
                           <div className="pt-9 text-center text-[10px] text-slate-300">signature &amp; stamp</div>
                         </div>
                       </div>
 
                       {/* Signatures: Received By (left) | Sign & Seal (right) matches PDF */}
-                      <div className="px-6 mt-7 grid grid-cols-2 gap-6 text-[11px] font-semibold">
-                        <div>
+                      <div className="px-3 sm:px-6 mt-7 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-[11px] font-semibold">
+                        <div className="break-words">
                           Received By:{' '}
-                          <span className="border-b border-[#222222] inline-block w-44" />
+                          <span className="border-b border-[#222222] inline-block w-44 max-w-full align-bottom" />
                         </div>
-                        <div className="text-right">
-                          Sign &amp; Seal: <span className="border-b border-[#222222] inline-block w-44" />
+                        <div className="break-words text-left sm:text-right">
+                          Sign &amp; Seal:{' '}
+                          <span className="border-b border-[#222222] inline-block w-44 max-w-full align-bottom" />
                         </div>
                       </div>
 
                       <p
-                        className="text-center text-[11px] mt-10 italic"
+                        className="text-center text-[11px] mt-10 px-3 sm:px-6 italic break-words [overflow-wrap:anywhere]"
                         style={{ color: RV.grey }}
                       >
                         This is a computer-generated document. No signature is required unless

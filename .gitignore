@@ -9,6 +9,9 @@ Evee.rar
 dev-server.log
 dev_server.log
 dev_server_err.log
+dev_server_local.log
+php_local.log
+php_err.log
 api/mail_secrets.php
 api/_crash.log
 *.apk
